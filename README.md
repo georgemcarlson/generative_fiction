@@ -71,8 +71,6 @@ def getArgs():
     "gpt40Enabled": True,
     "firstPerson": True,
     "author": fantasyAuthor,
-    #"prompt": dosPrompt 
-    #"prompt": notwPrompt,
     "prompt": prompt,
     "gradeLevel": 10,
     "perspective": "first-person",
