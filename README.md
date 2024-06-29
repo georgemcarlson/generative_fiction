@@ -3,7 +3,7 @@ Generate a novel work of fiction from a prompt to write a high-level outline for
 
 ## Credits:
 
-Based on Chiara Coetzee's research into "[Generating a full-length work of fiction with GPT-4](#https://medium.com/@chiaracoetzee/generating-a-full-length-work-of-fiction-with-gpt-4-4052cfeddef3)".
+Based on Chiara Coetzee's research into "[Generating a full-length work of fiction with GPT-4](#https://medium.com/@chiaracoetzee/generating-a-full-length-work-of-fiction-with-gpt-4-4052cfeddef3)"
 
 ## Sample Code:
 
