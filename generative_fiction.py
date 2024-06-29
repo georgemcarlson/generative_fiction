@@ -6,7 +6,12 @@ import traceback
 
 # https://medium.com/@chiaracoetzee/generating-a-full-length-work-of-fiction-with-gpt-4-4052cfeddef3
 
+
+
 book = {}
+
+def hello():
+  print("Hello world")
 
 chatModels = {
   "gpt35": {
