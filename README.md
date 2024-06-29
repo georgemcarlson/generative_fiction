@@ -1,5 +1,5 @@
 # Overview:
-Generate a novel work of fiction from a prompt to write a high-level outline for a book.
+Generate a full-length work of fiction from a prompt to write a high-level outline for a book.
 
 ## Credits:
 
