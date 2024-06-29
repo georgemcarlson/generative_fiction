@@ -64,7 +64,6 @@ def main(args):
     if "logger" in args:
       logger = args["logger"]
     book["logger"] = logger
-    warn("Begin Writing Book")
     openai.api_key = args["apiKey"]
     gpt40Enabled = True
     if "gpt40Enabled" in args:
