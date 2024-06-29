@@ -10,9 +10,9 @@ Based on Chiara Coetzee's research into "[Generating a full-length work of ficti
 ```python
 import logging
 import httpimport
-# next three imports speed up loading...
 print(
   "Loading Generative Fiction Module...")
+# next three imports speed up loading...
 import time
 import openai
 import traceback
