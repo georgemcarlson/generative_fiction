@@ -6,10 +6,6 @@ import traceback
 
 # https://medium.com/@chiaracoetzee/generating-a-full-length-work-of-fiction-with-gpt-4-4052cfeddef3
 
-
-def hello():
-  print("Hello world")
-
 book = {}
 
 chatModels = {
@@ -51,26 +47,6 @@ childrenAuthor = {
 whimsicalAuthor = {
   "temp": .8,
   "descr": "You are a whimsical author."
-}
-
-patrickRothfuss = {
-  "temp": .8,
-  "descr": "You are an author trying to write Kingkiller Chronicles fan-fiction. The prose you write in resembles Patrick Rothfuss's prose.",
-  "respExclusion": [
-    "Patrick Rothfuss",
-    "Rothfuss"
-  ]
-}
-
-fantasyAuthor = {
-  "temp": 1,
-  "descr": "You are an aspiring author trying to write a fantasy genre fan fiction book. The prose you write in is inspired by modern-day fantasy genere authors such as Patrick Rothfuss and George R. R. Martin.",
-  "respExclusion": [
-    "Patrick Rothfuss"
-    "Rothfuss",
-    "George R. R. Martin",
-    "George Martin"
-    ]
 }
 
 def test():
