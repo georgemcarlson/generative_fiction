@@ -25,21 +25,9 @@ chatModels = {
   }
 }
 
-openai.api_requestor.TIMEOUT_SECS = 300
-
 helpfulAssistant = {
   "temp": .8,
   "descr": "You are a helpful assistant."
-}
-
-childrenAuthor = {
-  "temp": .8,
-  "descr": "You are a whimsical author who writes childrens stories."
-}
-
-whimsicalAuthor = {
-  "temp": .8,
-  "descr": "You are a whimsical author."
 }
 
 def main(args):
@@ -48,7 +36,8 @@ def main(args):
     if "logger" in args:
       logger = args["logger"]
     book["logger"] = logger
-    openai.api_key = args["apiKey"]
+    book["apiKey"] = args["apiKey"]
+    book["apiTimeout"] = 300
     gpt40Enabled = True
     if "gpt40Enabled" in args:
       gpt40Enabled = args["gpt40Enabled"]
@@ -65,12 +54,10 @@ def main(args):
     book["assistant"] = helpfulAssistant
     initGradeLevel(args["gradeLevel"])
     setChatSystemRole(author["descr"])
-    #prompt = initKwotheOutline()
     prompt = args["prompt"]
     setWriteOutlinePrompt(prompt)
     initLvl1Notes()
     writeChapters()
-    print("$" + book["cost"])
   except:
     error(traceback.format_exc())
 
@@ -749,50 +736,31 @@ def getChatAuthorResp(action, msgs):
 
 def getGpt35Resp(action, temp, msgs):
   try:
-    return getGptResp(
+    return getSafeGptResp(
       action,
       chatModels["gpt35"],
       temp,
       getChatSystemRole(),
       msgs
     )
-  except openai.error.InvalidRequestError as e:
+  except Exception as e:
     warn("***WARN: " + str(e))
     return ""
-
-def getGpt35SafeResp(action, temp, msgs):
-  tokens = 0
-  for msg in msgs:
-    tokens += len(msg["content"]) / 4
-  model = chatModels["gpt35"]
-  if tokens > 12000:
-    if book["gpt40Enabled"]:
-      model = chatModels["gpt40"]
-  try:
-    return getSafeGptResp(
-      action, model, temp, msgs
-    )
-  except openai.error.APIConnectionError:
-    time.sleep(15)
-    return getSafeGptResp(
-      action, model, temp, msgs
-    )
     
 def getGpt40Resp(action, temp, msgs):
   try:
-    return getGptResp(
+    return getSafeGptResp(
       action,
       chatModels["gpt40"],
       temp,
       getChatSystemRole(),
       msgs
     )
-  except openai.error.InvalidRequestError as e:
+  except Exception as e:
     warn("***WARN: " + str(e))
-    return getGpt35Resp(
-      action, temp, msgs)
+    return ""
 
-def getGptResp(
+def getSafeGptResp(
   action,
   model,
   temp,
@@ -807,66 +775,27 @@ def getGptResp(
       "role": role,
       "content": msg})
   time.sleep(5)
-  openai.api_requestor.TIMEOUT_SECS = 120
   try:
-    return talliedChatRequest(
+    return getGptResp(
       action,
       model,
       temp,
       chatMsgs
-    ).choices[0].message.content
+    )
   except:
     notice("Rsp Failed")
     time.sleep(15)
-    openai.api_requestor.TIMEOUT_SECS = 300
     try:
-      return talliedChatRequest(
+      return getGptResp(
         "Retry Failed " + action,
         model,
         temp,
-        chatMsgs
-      ).choices[0].message.content
+        chatMsgs)
     except:
       notice("Rsp Retry Failed")
       return "Failed Response Retry"
   
-def getSafeGptResp(
-  action, 
-  model, 
-  temp, 
-  msgs):
-  time.sleep(5)
-  try:
-    response = talliedChatRequest(
-    action,
-    model,
-    temp,
-    msgs)
-    msg = response.choices[0].message
-    return msg.content
-  except openai.error.Timeout:
-    time.sleep(15)
-    return talliedChatRequest(
-    "Retry Due To Timeout",
-    model,
-    temp,
-    msgs)
-  except openai.error.APIError:
-    time.sleep(15)
-    return talliedChatRequest(
-    "Retry Due To API Err",
-    model,
-    temp,
-    msgs)
-  except openai.error.APIConnectionError:
-    time.sleep(15)
-    return talliedChatRequest(
-    "Retry Due To API Conn Err",
-    model,
-    temp,
-    msgs)
-  
-def talliedChatRequest(
+def getGptResp(
   action,
   model,
   temp,
@@ -878,37 +807,41 @@ def talliedChatRequest(
     reqTokens += len(msg["content"]) / 5
   reqCost = reqTokens * inputCost
   bookCost = getBookCost() + reqCost
+  book["cost"] = str(bookCost)
   notice(
     "${:.5f}; ".format(bookCost)
     + model["id"] + "; "
     + action
-    + " Req Sent" 
-  )
-  book["cost"] = str(bookCost)
+    + " Req Sent")
   reqStart = time.time()
+  openai.api_key = book["apiKey"]
+  openai.api_requestor.TIMEOUT_SECS = book["apiTimeout"]
   response = openai.ChatCompletion.create(
       model=model["id"],
       messages=msgs,
-      temperature=temp
-    )
+      temperature=temp)
+  respMsg = response.choices[0].message
+  respContent = respMsg.content
+  usage = response.usage
+  tokensIn = usage.prompt_tokens
+  tokensOut = usage.completion_tokens
   reqEnd = time.time()
-  inputTokens = response.usage.prompt_tokens
-  outputTokens = response.usage.completion_tokens
-  totalCost = inputTokens * inputCost + outputTokens * outputCost
-  bookCost = getBookCost() + totalCost - reqCost
+  tokensInCost = tokensIn * inputCost
+  tokensOutCost = tokensOut * outputCost
+  totalCost = tokensInCost+tokensOutCost
+  respCost = totalCost - reqCost
+  bookCost = getBookCost() + respCost
+  book["cost"] = str(bookCost)
   duration = int(reqEnd - reqStart)
-  units = "Secs"
   if duration < 2:
-    duration = 1
-    units = "Sec"
+    duration = 2
   notice(
     "${:.5f}; ".format(bookCost)
     + model["id"] + "; "
     + "Rsp Received In " 
-    + str(duration) + " " + units
+    + str(duration) + " secs"
   )
-  book["cost"] = str(bookCost)
-  return response
+  return respContent
   
 def countTokens(messages):
   tokens = 0
