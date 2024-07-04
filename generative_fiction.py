@@ -1,6 +1,6 @@
 import re
 import time
-import openai
+from openai import OpenAI
 import logging
 import traceback
 
@@ -814,9 +814,12 @@ def getGptResp(
     + action
     + " Req Sent")
   reqStart = time.time()
-  openai.api_key = book["apiKey"]
-  openai.api_requestor.TIMEOUT_SECS = book["apiTimeout"]
-  response = openai.ChatCompletion.create(
+  client = OpenAI(
+    api_key = book["apiKey"],
+    timeout = book["apiTimeout"],
+    max_retries = 2
+  )
+  response = client.chat.completions.create(
       model=model["id"],
       messages=msgs,
       temperature=temp)
