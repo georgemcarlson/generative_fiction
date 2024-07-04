@@ -27,18 +27,11 @@ chatModels = {
 
 openai.api_requestor.TIMEOUT_SECS = 300
 
-outlinePrompt = """Please write a high-level outline for a childrens story. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter. The book should be 6 chapters long. The book should be about the following:
-    
-An adventure about two lizards, Cleo the Chameleon and Izzy the Iguana on their adventure to find Treasure Island."""
-
-outlinePrompt2 = """Please write a high-level outline for a book. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter. The book should be about the following:
-    
-You can pick any title and genre you want."""
-
 helpfulAssistant = {
   "temp": .8,
   "descr": "You are a helpful assistant."
 }
+
 childrenAuthor = {
   "temp": .8,
   "descr": "You are a whimsical author who writes childrens stories."
@@ -48,15 +41,6 @@ whimsicalAuthor = {
   "temp": .8,
   "descr": "You are a whimsical author."
 }
-
-def test():
-  args = getArgs()
-  openai.api_key = args["apiKey"]
-  outlineDraft = '''Please resumarize the following outline:
-
-```
-'''
-  print(getChatAuthorResp("Condense", [outlineDraft]))
 
 def main(args):
   try:
@@ -94,7 +78,6 @@ def writeChapters():
   # useing a while loop because the total number of chapters can change over time.
   i = 1
   while isNotLastCh(i):
-  #for _ in range(1, 2):
     writeBook(p(p(p("Chapter: " + str(i)))))
     outlineChapter(i)
     writeChapter(i)
@@ -160,29 +143,11 @@ Make sure that the chapter is rewritten to a {thisGradeLevel} grade reading leve
     ]
   )
   info("Ch Draft:\n\n" + chDraft)
-  chDraftScenes = chDraft.split("***")
-  sceneCount = getChatIntResp(
-    '''Count Ch {thisChNum} Scenes'''.format(
-      thisChNum = chNum
-    ),
-    [
-      '''Count and return as an integer the total number of scenes in the following chapter:
-
-```
-{thisChDraft}
-```'''.format(
-        thisChDraft = chDraft
-      )
-    ]
+  chDraftScenes = parseScenes(chDraft)
+  sceneCount = countScenes(
+    chNum,
+    chDraftScenes
   )
-  if sceneCount < 2:
-    sceneCount = len(chDraftScenes)
-  elif sceneCount > len(chDraftScenes):
-    sceneCount = len(chDraftScenes)
-  info('''Ch {thisChNum} scene count: {thisSceneCount}'''.format(
-    thisChNum = chNum,
-    thisSceneCount = sceneCount
-  ))
   chOutline = ""
   for i in range(int(sceneCount)):
     sceneDraft = chDraftScenes[i].strip()
@@ -246,30 +211,12 @@ Make sure that the chapter is rewritten to a {thisGradeLevel} grade reading leve
       )
     ]
   )
-  chDraftScenes = chDraft.split("***")
-  sceneCount = getChatIntResp(
-    '''Count Ch {thisChNum} Scenes'''.format(
-      thisChNum = chNum
-    ),
-    [
-      '''Count and return as an integer the total number of scenes in the following chapter:
-
-```
-{thisChDraft}
-```'''.format(
-        thisChDraft = chDraft
-      )
-    ]
-  )
-  if sceneCount < 2:
-    sceneCount = len(chDraftScenes)
-  elif sceneCount > len(chDraftScenes):
-    sceneCount = len(chDraftScenes)
   setChDraft(chNum, chDraft)
-  info('''Ch {thisChNum} scene count: {thisSceneCount}'''.format(
-    thisChNum = chNum,
-    thisSceneCount = sceneCount
-  ))
+  chDraftScenes = parseScenes(chDraft)
+  sceneCount = countScenes(
+    chNum,
+    chDraftScenes
+  )
   chapter = ""
   for i in range(int(sceneCount)):
     chapter = chapter.strip() + '''
@@ -295,6 +242,44 @@ Chapter {thisChNum}:
     thisChNum = chNum,
     thisChapter = chapter
   )
+
+def parseScenes(chDraft):
+  chDraftScenes = chDraft.split("***")
+  cleanChDraftScenes = []
+  for scene in chDraftScenes:
+    if len(scene) < 50:
+      continue
+    if "." not in scene:
+      continue
+    if scene.strip().startswith("Chapter"):
+      continue
+    cleanChDraftScenes.append(scene)
+  return cleanChDraftScenes
+
+def countScenes(chNum, chDraftScenes):
+  sceneCount = getChatIntResp(
+    '''Count Ch {thisChNum} Scenes'''.format(
+      thisChNum = chNum
+    ),
+    [
+      '''Count and return as an integer the total number of scenes in the following chapter:
+
+```
+{thisChDraft}
+```'''.format(
+        thisChDraft="***".join(chDraftScenes)
+      )
+    ]
+  )
+  if sceneCount < 2:
+    sceneCount = len(chDraftScenes)
+  elif sceneCount > len(chDraftScenes):
+    sceneCount = len(chDraftScenes)
+  info('''Ch {thisChNum} scene count: {thisSceneCount}'''.format(
+    thisChNum = chNum,
+    thisSceneCount = sceneCount
+  ))
+  return sceneCount
 
 def rewriteScene(chNum, sceneNum, chDraftScenes):
   sceneCount = len(chDraftScenes)
@@ -324,7 +309,7 @@ def rewriteScene(chNum, sceneNum, chDraftScenes):
 ```'''.format(
     thisScene = sceneDraft)
   ])
-  info("Last Final paragraph:\n\n"+lastParagraph)
+  info("Last Final paragraph:\n\n" + lastParagraph)
   qualityControlPrompt = '''Please rewrite Scene {thisSceneNum} for Chapter {thisChNum} of my book to be a longer more detailed version. Use the following guidance:
 
 Please make sure that you reuse at least 60% of the words in the original scene's text.
@@ -623,7 +608,7 @@ def updateLvl1Notes(chNum):
 
 def initLvl1Notes():
   chat = [getWriteOutlinePrompt()]
-  outline = getChatAssistantResp(
+  outline = getChatAuthorResp(
     "Init Outline",
     chat
   )
