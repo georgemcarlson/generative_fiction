@@ -8,7 +8,7 @@ Based on Chiara Coetzee's research into "[Generating a full-length work of ficti
 ## Dependencies:
 
 ```sh
-pip install openai==0.28.1
+pip install openai==1.11.1
 ```
 
 ## Sample Code:
