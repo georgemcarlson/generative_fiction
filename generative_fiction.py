@@ -2,11 +2,11 @@ import re
 import time
 from openai import OpenAI
 import logging
-import traceback
 
 # https://medium.com/@chiaracoetzee/generating-a-full-length-work-of-fiction-with-gpt-4-4052cfeddef3
 
 book = {}
+settings =  {}
 
 chatModels = {
   "gpt35": {
@@ -30,62 +30,43 @@ helpfulAssistant = {
   "descr": "You are a helpful assistant."
 }
 
-def main(args):
-  try:
-    logger = logging.getLogger("default")
-    if "logger" in args:
-      logger = args["logger"]
-    book["logger"] = logger
-    book["apiKey"] = args["apiKey"]
-    book["apiTimeout"] = 300
-    gpt40Enabled = True
-    if "gpt40Enabled" in args:
-      gpt40Enabled = args["gpt40Enabled"]
-    initGpt40(gpt40Enabled)
-    perspective = "third-person"
-    if "firstPerson" in args:
-      if args["firstPerson"]:
-        perspective = "first-person"
-    initPerspective(perspective)
-    book["book"] = ""
-    book["continuityNotes"] = ""
-    author = args["author"]
-    book["author"] = author
-    book["assistant"] = helpfulAssistant
-    initGradeLevel(args["gradeLevel"])
-    setChatSystemRole(author["descr"])
-    prompt = args["prompt"]
-    setWriteOutlinePrompt(prompt)
-    initLvl1Notes()
-    writeChapters()
-  except:
-    error(traceback.format_exc())
+def writeBook(args):
+  theBook = {}
+  theBook["theEnd"] = False
+  theBook["chapters"] = {}
+  # using a while loop because the total
+  #   number of chapters can change over
+  #   time.
+  while not theBook["theEnd"]:
+    chNum = len(theBook["chapters"]) + 1
+    theBook = writeChapter(
+      chNum,
+      theBook,
+      args)
 
-def writeChapters():
-  # useing a while loop because the total number of chapters can change over time.
-  i = 1
-  while isNotLastCh(i):
-    writeBook(p(p(p("Chapter: " + str(i)))))
-    outlineChapter(i)
-    writeChapter(i)
-    updateLvl1Notes(i)
-    i = i + 1
-  writeBook(p(p(p("Chapter: " + str(i)))))
-  outlineFinalChapter()
-  writeFinalChapter()
-
-def writeFinalChapter():
-    writeChapter(getChCount())
-    
-def getMessages(messagesArray):
-  messages = []
-  for theMessages in messagesArray:
-    messages.append(theMessages)
-  return messages
-
-def writeChapter(chNum):
-  info("Writing next chapter:")
+def writeChapter(chNum, save, args):
+  loadSettings(args)
   gradeLevel = getGradeLevelAsInt()
+  book["continuity"] = ""
+  book["theEnd"] = False
+  if chNum == 0:
+    return book.copy()
+  elif chNum == 1:
+    initOutlinePrompt = args["prompt"]
+    initLvl1Notes(initOutlinePrompt)
+  else:
+    debug("Loading Save State...")
+    loadSaveState(chNum, save)
+  if book["theEnd"]:
+    critical(p(p(p("The End"))))
+    return book.copy()
+  info("Writing next chapter:")
+  critical(
+    p(p(p("Chapter: " + str(chNum)))))
+  if isLastCh(chNum):
+    outlineFinalChapter()
+  else:
+    outlineChapter(chNum)
   chDraft = getChatAuthorResp(
     '''Ch {thisChNum} 1st Draft'''.format(
       thisChNum = chNum
@@ -204,31 +185,18 @@ Make sure that the chapter is rewritten to a {thisGradeLevel} grade reading leve
     chNum,
     chDraftScenes
   )
-  chapter = ""
+  scenes = []
   for i in range(int(sceneCount)):
-    chapter = chapter.strip() + '''
-
-* * *
-
-
-''' + writeScene(
+    scene = writeScene(
       chNum,
       i+1,
-      chDraftScenes
-    )
-  setCh(chNum, chapter)
-  book["book"] = book["book"] + '''
-
-
-
-Chapter {thisChNum}:
-
-{thisChapter}
-
-'''.format(
-    thisChNum = chNum,
-    thisChapter = chapter
-  )
+      chDraftScenes)
+    scenes.append(scene)
+    if i > 1:
+      critical(p("* * *"))
+    critical(p(scene))
+  saveChapter(chNum, scenes)
+  return book.copy()
 
 def parseScenes(chDraft):
   chDraftScenes = chDraft.split("***")
@@ -419,7 +387,6 @@ Scene {thisSceneNum} Continuity Notes:
   )
   if getPerspective() == "first-person":
     scene = rewriteInFirstPerson(scene)
-  setScene(chNum, sceneNum, scene)
   return scene
   
 def outlineFinalChapter():
@@ -587,14 +554,12 @@ def outlineChapter(chNum):
       chat
     )
   )
-  
-def updateLvl1Notes(chNum):
-  #updateOutline(chNum)
-  updateCharDescs(chNum)
-  updateContinuity(chNum)
 
-def initLvl1Notes():
-  chat = [getWriteOutlinePrompt()]
+def initLvl1Notes(initOutlinePrompt):
+  info("""Setting prompt to write the high-level book outline to:
+
+""" + initOutlinePrompt)
+  chat = [initOutlinePrompt]
   outline = getChatAuthorResp(
     "Init Outline",
     chat
@@ -682,7 +647,7 @@ def setBoundingScenes(chNum):
     break
 
 def condenseContinuityNotes():
-  if book["gpt40Enabled"]:
+  if settings["gpt40Enabled"]:
     info("Skip condensing continuity because gpt40 is enabled.")
     return
   else:
@@ -717,19 +682,19 @@ def getChatIntResp(action, msgs):
   return -1
 
 def getChatAssistantResp(action, msgs):
-  temp = book["assistant"]["temp"]
+  temp = settings["assistant"]["temp"]
   tokens = 0
   for msg in msgs:
     tokens += len(msg) / 4
   if tokens > 14000:
-    if book["gpt40Enabled"]:
+    if settings["gpt40Enabled"]:
       return getGpt40Resp(
         action, temp, msgs)
   return getGpt35Resp(action, temp, msgs)
 
 def getChatAuthorResp(action, msgs):
-  temp = book["author"]["temp"]
-  if not book["gpt40Enabled"]:
+  temp = settings["author"]["temp"]
+  if not settings["gpt40Enabled"]:
     return getGpt35Resp(
       action, temp, msgs)
   return getGpt40Resp(action, temp, msgs)
@@ -815,8 +780,8 @@ def getGptResp(
     + " Req Sent")
   reqStart = time.time()
   client = OpenAI(
-    api_key = book["apiKey"],
-    timeout = book["apiTimeout"],
+    api_key = settings["apiKey"],
+    timeout = settings["apiTimeout"],
     max_retries = 2
   )
   response = client.chat.completions.create(
@@ -911,7 +876,7 @@ Scene to rewrite:
         [altFirstPersonPrompt]
     )
     respContainsExclusion = False
-    author = book["author"]
+    author = settings["author"]
     if "respExclusion" in author:
       for val in author["respExclusion"]:
         if val in resp:
@@ -923,81 +888,54 @@ Scene to rewrite:
   warn("***WARN: Unable to convert content to first-person perspective.")
   return content
 
-def writeBook(content):
-  divider = "------------------------------"
-  book["logger"].warning(divider)
-  book["logger"].critical(content)
-
 def p(line):
   return "\n" + line + "\n"
 
-def println():
-  divider = "------------------------------"
-  book["logger"].warning(divider)
-
 def debug(line):
   divider = "------------------------------"
-  book["logger"].debug(divider)
-  book["logger"].debug(line)
+  settings["logger"].debug(divider)
+  settings["logger"].debug(line)
 
 def info(line):
   divider = "------------------------------"
-  book["logger"].info(divider)
-  book["logger"].info(line)
+  settings["logger"].info(divider)
+  settings["logger"].info(line)
 
 def notice(line):
   divider = "------------------------------"
-  book["logger"].warning(divider)
-  book["logger"].warning(line)
+  settings["logger"].warning(divider)
+  settings["logger"].warning(line)
 
 def warn(line):
   divider = "------------------------------"
-  book["logger"].warning(divider)
-  book["logger"].warning(line)
+  settings["logger"].warning(divider)
+  settings["logger"].warning(line)
 
 def error(line):
   divider = "------------------------------"
-  book["logger"].error(divider)
-  book["logger"].error(line)
+  settings["logger"].error(divider)
+  settings["logger"].error(line)
+
+def critical(content):
+  divider = "------------------------------"
+  settings["logger"].warning(divider)
+  settings["logger"].critical(content)
 
 def getBookCost():
   if "cost" in book:
     return float(book["cost"])
   return 0.00
-
-def initGpt40(gpt40Enabled):
-  if "gpt40Enabled" not in book:
-    if gpt40Enabled:
-      notice("Chat GPT-4 is enabled.")
-    else:
-      notice("Chat GPT-4 is disabled.")
-    book["gpt40Enabled"] = gpt40Enabled
-
-def initPerspective(perspective):
-  if "perspective" not in book:
-    notice(
-      "Setting perspective to: " + perspective
-    )
-    book["perspective"] = perspective
   
 def getPerspective():
-  if "perspective" in book:
-    return book["perspective"]
+  if "perspective" in settings:
+    return settings["perspective"]
   else:
     return "third-person"
-    
-def initGradeLevel(gradeLevel):
-  if "gradeLevel" not in book:
-    notice(
-      "Setting reading level to: grade " 
-      + str(gradeLevel)
-    )
-    book["gradeLevel"] = str(gradeLevel)
 
 def getGradeLevelAsInt():
   gradeLevel = 10
-  if "gradeLevel" in book:
-    gradeLevel = int(book["gradeLevel"])
+  if "gradeLevel" in settings:
+    gradeLevel = int(settings["gradeLevel"])
   if gradeLevel > 0 and gradeLevel < 21:
     return gradeLevel
   return 10
@@ -1018,33 +956,23 @@ def getTargetChapterLength():
   gradeLevel = getGradeLevelAsInt()
   return gradeLevel * 300
   
-def setWriteOutlinePrompt(prompt):
-  info(p("Setting prompt to write the high-level book outline to:") + p(prompt))
-  book["writeHighLevelOutlinePrompt"] = prompt
-
-def getWriteOutlinePrompt():
-  return book["writeHighLevelOutlinePrompt"]
-  
-def getSystemRoleMsg():
-  return {"role": "system", "content": book["chatSystemRole"]}
-  
 def getChatSystemRole():
-  return {"role": "system", "content": book["chatSystemRole"]}
-  
-def setChatSystemRole(content):
-  info(p("Setting chat system role to:") + p(content))
-  book["chatSystemRole"] = content
+  author = settings["author"]
+  chatSystemRole = author["descr"]
+  return {
+    "role": "system",
+    "content": chatSystemRole}
   
 def getOutlinePrompt():
   return "Please print out my book's High-Level Outline. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter."
     
 def getOutline():
-  return book["highLevelOutline"]
+  return book["outline"]
 
 def initOutline(outline):
   if "highLevelOutline" not in book:
     info("Setting initial book outline to:\n\n" + outline)
-    book["highLevelOutline"] = outline
+    book["outline"] = outline
   
 def updateOutline(chNum):
   for i in range(4):
@@ -1059,8 +987,8 @@ def updateOutline(chNum):
       getCharDescs(),
       getChChronoPrompt(chNum),
       getChChrono(chNum),
-      getChPrompt(chNum),
-      getCh(chNum),
+      getChScenesPrompt(chNum),
+      getChScenes(chNum),
       "Please edit and update my book's' high-level outline, taking into consideration my book's characters and notable items, Chronology, Continuity Notes, and draft of Chapter " + str(chNum) + ". Print out the updated high-level outline for my book. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter."
     ]
     action = "Update Book Outline"
@@ -1090,21 +1018,21 @@ def updateOutline(chNum):
 
 def setOutline(outline):
   debug("Setting book outline to:\n\n" + outline)
-  book["highLevelOutline"] = outline
+  book["outline"] = outline
   
 def getCharDescsPrompt():
   return "Please print out a list of my book's characters, with short descriptions of them, and all settings in the story, with short descriptions. Also list any notable items or objects in the story, with short descriptions."
   
 def getCharDescs():
-  return book["characterDescriptions"]
+  return book["charDescs"]
   
 def setCharDescsInit(charDescs):
   info(p("Setting initial character descriptions to:") + p(charDescs))
-  book["characterDescriptions"] = charDescs
+  book["charDescs"] = charDescs
   
 def setCharDescs(charDescs):
   debug(p("Setting character descriptions to:") + p(charDescs))
-  book["characterDescriptions"] = charDescs
+  book["charDescs"] = charDescs
 
 def initProtagionist(charName):
   if "protagionist" not in book:
@@ -1168,7 +1096,7 @@ Continuity Notes:
   #   so a rolling continuity window is
   #   needed. GPT40 has a 128k context
   #   window so this becomes a non-issue
-  if book["gpt40Enabled"]:
+  if settings["gpt40Enabled"]:
     info("Do not use a rolling context window when condensing continuity notes because gpt40 is enabled.")
   else:
     info("Use a 4 chapter rolling context window when condensing continuity notes because gpt40 is not enabled.")
@@ -1177,6 +1105,7 @@ Continuity Notes:
   for i in range(rangeLow, rangeHigh):
     continuity += "\n" + getChContinuity(i)
   setContinuity(continuity)
+  return continuity
 
 def updateCharDescs(chNum):
   chat = [
@@ -1190,16 +1119,18 @@ def updateCharDescs(chNum):
     getCharDescs(),
     getChChronoPrompt(chNum),
     getChChrono(chNum),
-    getChPrompt(chNum),
-    getCh(chNum),
+    getChScenesPrompt(chNum),
+    getChScenes(chNum),
     '''Please edit and update my book's lists of characters and notable items. Take into consideration my book's high-level outline, existing characters and notable items, Chronology, Continuity Notes, and draft of Chapter {thisChNum}. When listimg out characters please include a short descriptions of them. Also include a short description for each of the listed notable items.'''.format(
       thisChNum = chNum
     )
   ]
-  setCharDescs(getChatAssistantResp(
+  charDescs = getChatAssistantResp(
     "Update Char Descrs",
     chat
-  ))
+  )
+  setCharDescs(charDescs)
+  return charDescs
 
 def initTitle():
   chat = [
@@ -1212,18 +1143,18 @@ def initTitle():
   if "title:" in title.lower():
     title = title[title.find("title:") + 6].trim()
   info(p("Setting initial title to:"))
-  writeBook(title)
+  critical(title)
   book["title"] = title
   
 def getContinuityPrompt():
   return '''Please briefly note any important details or facts from this book's from Continuity Notes that you need to remember while writing the rest of the book, in order to ensure continuity and consistency. Label these Continuity Notes.'''
 
 def getContinuity():
-  return book["continuityNotes"]
+  return book["continuity"]
   
 def setContinuity(continuity):
   debug("Setting continuity notes to:\n\n" + continuity)
-  book["continuityNotes"] = continuity
+  book["continuity"] = continuity
 
 def updateChCount():
   chCount = getChatIntResp(
@@ -1244,18 +1175,101 @@ def updateChCount():
 def getChCount():
   return int(book["chCount"])
     
-def isNotLastCh(chNum):
-  return chNum < getChCount()
+def isLastCh(chNum):
+  return chNum >= getChCount()
   
-def getChPrompt(chNum):
+def getChScenesPrompt(chNum):
   return "Please print out my book's draft of Chapter " + str(chNum) + " that has all already happened and should not be repeated."
 
-def getCh(chNum):
-  return book["ch" + str(chNum)]
+def getChScenes(chNum):
+  chapter = getChapter(chNum)
+  scenes = chapter["scenes"]
+  return """
 
-def setCh(chNum, ch):
-  debug(p("Setting Chapter " + str(chNum) + " to:") + p(ch))
-  book["ch" + str(chNum)] = ch
+* * *
+
+""".join(scenes)
+
+def getChapter(chNum):
+  chKey = "ch" + str(chNum)
+  return book["chapters"][chKey]
+
+def saveChapter(chNum, scenes):
+  if "chapters" not in book:
+    book["chapters"] = {}
+  chapters = book["chapters"]
+  chapter = {}
+  chapters["ch" + str(chNum)] = chapter
+  chapter["scenes"] = scenes
+  chapter["bookCost"] = book["cost"]
+  chapter["bookTitle"] = book["title"]
+  #updateOutline(chNum)
+  outline = getOutline()
+  chapter["bookOutline"] = outline
+  chapter["bookChCount"] = getChCount()
+  chapter["isBookDone"]=isLastCh(chNum)
+  protagionist = getProtagionist()
+  chapter["bookProtagionist"] =protagionist
+  charDescs = updateCharDescs(chNum)
+  chapter["bookCharDescs"] = charDescs
+  continuity = updateContinuity(chNum)
+  chapter["bookContinuity"] = continuity
+  debug("""Saving Chapter {thisChNum} as:
+
+{thisChObj}""".format(
+    thisChNum = chNum,
+    thisChObj = chapter))
+
+def loadSaveState(chNum, save):
+  book.clear()
+  for key in save:
+    book[key] = save[key]
+  prevCh = getChapter(chNum - 1)
+  book["cost"] = prevCh["bookCost"]
+  book["title"] = prevCh["bookTitle"]
+  book["outline"] = prevCh["bookOutline"]
+  chCount = prevCh["bookChCount"]
+  book["chCount"] = chCount
+  protagionist = prevCh["bookProtagionist"]
+  book["protagionist"] = protagionist
+  charDescs = prevCh["bookCharDescs"]
+  book["charDescs"] = charDescs
+  continuity = prevCh["bookContinuity"]
+  book["continuity"] = continuity
+  book["theEnd"] = prevCh["isBookDone"]
+
+def loadSettings(args):
+  logger = logging.getLogger("default")
+  if "logger" in args:
+    logger = args["logger"]
+  settings["logger"] = logger
+  settings["apiKey"] = args["apiKey"]
+  settings["apiTimeout"] = 300
+  author = args["author"]
+  settings["author"] = author
+  settings["assistant"] = helpfulAssistant
+  gpt40Enabled = True
+  if "gpt40Enabled" in args:
+    gpt40Enabled = args["gpt40Enabled"]
+  if gpt40Enabled:
+    notice("Chat GPT-4 is enabled.")
+  else:
+    notice("Chat GPT-4 is disabled.")
+  settings["gpt40Enabled"] = gpt40Enabled
+  perspective = "third-person"
+  if "firstPerson" in args:
+    if args["firstPerson"]:
+      perspective = "first-person"
+  notice(
+    "Setting perspective to: " + perspective)
+  settings["perspective"] = perspective
+  if "gradeLevel" in args:
+    gradeLevel = args["gradeLevel"]
+    notice(
+      "Setting reading level to: grade " 
+      + str(gradeLevel)
+    )
+    settings["gradeLevel"] = str(gradeLevel)
 
 def getChContinuityPrompt(chNum):
   return "Please briefly note any important details or facts from this book's Continuity Notes that you will need to remember while writing Chapter " + str(chNum) + " of my book, in order to ensure continuity and consistency. Label these Continuity Notes."
@@ -1362,12 +1376,3 @@ def getChDraft(chNum):
 
 def getScenePrompt(chNum, sceneNum):
   return "For my book, please print out Scene " + str(sceneNum) + " of Chapter " + str(chNum) + ". The events of this scene have already happened, will not change, and must not be repeated."
-
-def setScene(chNum, sceneNum, scene):
-  info(p("Setting Chapter " + str(chNum) + " Scene " + str(sceneNum) + " to:"))
-  writeBook(p("* * *"))
-  writeBook(p(scene))
-  book["ch" + str(chNum) + "sc" + str(sceneNum)] = scene
-
-def getScene(chNum, sceneNum):
-  return book["ch" + str(chNum) + "sc" + str(sceneNum)]
