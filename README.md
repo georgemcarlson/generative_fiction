@@ -66,7 +66,7 @@ def getArgs():
   bookLogger.addHandler(b_handler)
   return {
     "apiKey": theApiKey,
-    "gpt40Enabled": False,
+    "gpt40Enabled": True,
     "firstPerson": False,
     "author": fantasyAuthor,
     "prompt": prompt,
