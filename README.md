@@ -15,15 +15,7 @@ pip install openai==1.11.1
 
 ```python
 import logging
-import httpimport
-print(
-  "Loading Generative Fiction Module...")
-# next three imports speed up loading...
-import time
-import openai
-import traceback
-with httpimport.github_repo('georgemcarlson', 'generative_fiction', ref='main'):
-  import generative_fiction
+import generative_fiction
 
 # Constants
 theApiKey = "the_api_key_to_use"
@@ -32,7 +24,7 @@ pathToDocDir = "/the/path/to/log/to/"
 def getArgs():
   prompt = "Please write a high-level outline for a book. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter. You can pick any title and genre you want."
   fantasyAuthor = {
-    "temp": 1,
+    "temp": 0.95,
     "descr": "You are an aspiring author trying to write a fantasy genre fan fiction book. The prose you write in is inspired by modern-day fantasy genere authors such as Patrick Rothfuss and George R. R. Martin.",
     "respExclusion": [
       "Patrick Rothfuss"
@@ -74,15 +66,14 @@ def getArgs():
   bookLogger.addHandler(b_handler)
   return {
     "apiKey": theApiKey,
-    "gpt40Enabled": True,
-    "firstPerson": True,
+    "gpt40Enabled": False,
+    "firstPerson": False,
     "author": fantasyAuthor,
     "prompt": prompt,
     "gradeLevel": 10,
-    "perspective": "first-person",
     "logger": bookLogger,
   }
 
 print("Begin Writing Book...")
-generative_fiction.main(getArgs())
+generative_fiction.writeBook(getArgs())
 ```
