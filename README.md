@@ -13,6 +13,8 @@ pip install openai==1.11.1
 
 ## Sample Code:
 
+Generate a whole book in one go. Supply a custom logger to write the book contents to a file.
+
 ```python
 import logging
 import generative_fiction
@@ -20,60 +22,115 @@ import generative_fiction
 # Constants
 theApiKey = "the_api_key_to_use"
 pathToDocDir = "/the/path/to/log/to/"
-
-def getArgs():
-  prompt = "Please write a high-level outline for a book. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter. You can pick any title and genre you want."
-  fantasyAuthor = {
-    "temp": 0.95,
-    "descr": "You are an aspiring author trying to write a fantasy genre fan fiction book. The prose you write in is inspired by modern-day fantasy genere authors such as Patrick Rothfuss and George R. R. Martin.",
-    "respExclusion": [
-      "Patrick Rothfuss"
-      "Rothfuss",
-      "George R. R. Martin",
-      "George Martin"
-      ]
-  }
-  # Create a custom logger
-  bookLogger = logging.getLogger("book")
-  bookLogger.setLevel(logging.DEBUG)
-  # Log book contents and cost to console
-  c_handler = logging.StreamHandler()
-  c_handler.setLevel(logging.WARNING)
-  bookLogger.addHandler(c_handler)
-  # Log WARNING to external file
-  f_handler = logging.FileHandler(
-    pathToDocDir + "book.log.warning.txt", 
-    mode = "w"
-  )
-  f_handler.setLevel(logging.WARNING)
-  bookLogger.addHandler(f_handler)
-  # Log DEBUG to external file
-  d_handler = logging.FileHandler(
-    pathToDocDir + "book.log.debug.txt", 
-    mode = "w"
-  )
-  d_handler.setLevel(logging.DEBUG)
-  bookLogger.addHandler(d_handler)
-  # Log book contents to external file
-  # Note:
-  #   All the book's contents
-  #   are logged as CRITICAL
-  b_handler = logging.FileHandler(
-    pathToDocDir + "book.txt", 
-    mode = "w"
-  )
-  b_handler.setLevel(logging.CRITICAL)
-  bookLogger.addHandler(b_handler)
-  return {
-    "apiKey": theApiKey,
-    "gpt40Enabled": True,
-    "firstPerson": False,
-    "author": fantasyAuthor,
-    "prompt": prompt,
-    "gradeLevel": 10,
-    "logger": bookLogger,
-  }
-
+thePrompt = """Please write a high-level outline for a book. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter. You can pick any title and genre you want."""
+fantasyAuthor = {
+  "temp": 0.95,
+  "descr": """You are an aspiring author trying to write a fantasy genre fan fiction book. The prose you write in is inspired by modern-day fantasy genere authors such as Patrick Rothfuss and George R. R. Martin.""",
+  "respExclusion": [
+    "Patrick Rothfuss"
+    "Rothfuss",
+    "George R. R. Martin",
+    "George Martin"
+    ]
+}
+# Create a custom logger
+bookLogger = logging.getLogger("book")
+bookLogger.setLevel(logging.DEBUG)
+# Log book contents and cost to console
+c_handler = logging.StreamHandler()
+c_handler.setLevel(logging.WARNING)
+bookLogger.addHandler(c_handler)
+# Log book contents to external file
+# Note:
+#   All the book's contents
+#   are logged as CRITICAL
+b_handler = logging.FileHandler(
+  pathToDocDir + "book.txt", 
+  mode = "w"
+)
+b_handler.setLevel(logging.CRITICAL)
+bookLogger.addHandler(b_handler)
+# configure arguments needed by the
+# generative_fiction logic to write a book
+args = {
+  "apiKey": theApiKey,
+  "gpt40Enabled": True,
+  "firstPerson": False,
+  "author": fantasyAuthor,
+  "prompt": thePrompt,
+  "gradeLevel": 10,
+  "logger": bookLogger,
+}
+# write the book
 print("Begin Writing Book...")
-generative_fiction.writeBook(getArgs())
+generative_fiction.writeBook(args)
+```
+
+Generate a book one chapter at a time. Save the books state after each generated chapter. Will allow for re-generating chapters. Good for generating a chapter, proof-reading to make sure it's a "keeper", and then moving on to the next chapter.
+
+```python
+import generative_fiction
+import json
+
+# Constants
+theApiKey = "the_api_key_to_use"
+pathToDocDir = "/the/path/to/log/to/"
+chNumStart = 2
+amount = 1
+thePrompt = """Please write a high-level outline for a book. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter. You can pick any title and genre you want."""
+fantasyAuthor = {
+  "temp": 0.95,
+  "descr": """You are an aspiring author trying to write a fantasy genre fan fiction book."""
+}
+# configure arguments needed by the
+# generative_fiction logic to write a book
+args = {
+  "apiKey": theApiKey,
+  "gpt40Enabled": True,
+  "author": fantasyAuthor,
+  "prompt": thePrompt,
+  "gradeLevel": 10,
+}
+# load save state from file if it exists
+book = {}
+try:
+  f = open(pathToDocDir + 'book.json') 
+  book = json.load(f)
+  f.load()
+except:
+  # no save state exists; start new book
+  book["theEnd"] = False
+# generate the book
+print("Begin Generating Book...")
+chStart = chNumStart
+chEnd = chStart + amount
+for chNum in range(chStart, chEnd):
+  if book["theEnd"]:
+    break
+  book = generative_fiction.writeChapter(
+    chNum,
+    book,
+    args)
+  # save state to a file after each chapter
+  f = open(pathToDocDir + 'book.json', 'w')
+  json.dump(book, f)
+  f.close()
+# write the conent to a file
+content = book["title"]
+chapters = book["chapters"]
+sceneDivider="\n\n* * *\n\n"
+for i in range(0, len(chapters)):
+  chNum=i+1
+  content=content+"\n\n\n\n\n"
+  content=content+"Chapter "+str(chNum)
+  content=content+"\n\n\n\n\n"
+  chapter=chapters["ch" + str(chNum)]
+  divider=sceneDivider
+  scenes=divider.join(chapter["scenes"])
+  content=content+scenes
+if book["theEnd"]:
+  content=content+"\n\n\n\n\nThe End."
+f = open(pathToDocDir + "book.txt", "w")
+f.write(content)
+f.close()
 ```
