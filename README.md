@@ -86,7 +86,7 @@ fantasyAuthor = {
 # generative_fiction logic to write a book
 args = {
   "apiKey": theApiKey,
-  "gpt40Enabled": False,
+  "gpt40Enabled": True,
   "author": fantasyAuthor,
   "prompt": thePrompt,
   "gradeLevel": 10,
