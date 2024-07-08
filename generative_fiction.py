@@ -33,22 +33,26 @@ helpfulAssistant = {
 def writeBook(args):
   theBook = {}
   theBook["theEnd"] = False
-  theBook["chapters"] = {}
   # using a while loop because the total
   #   number of chapters can change over
   #   time.
   while not theBook["theEnd"]:
-    chNum = len(theBook["chapters"]) + 1
+    chNum = 1
+    if "chapters" in theBook:
+      chNum = len(theBook["chapters"]) + 1
     theBook = writeChapter(
       chNum,
       theBook,
       args)
+  return theBook.copy()
 
 def writeChapter(chNum, save, args):
   loadSettings(args)
   gradeLevel = getGradeLevelAsInt()
+  book.clear()
   book["continuity"] = ""
   book["theEnd"] = False
+  book["chapters"] = {}
   if chNum == 0:
     return book.copy()
   elif chNum == 1:
