@@ -75,8 +75,8 @@ import json
 # Constants
 theApiKey = "the_api_key_to_use"
 pathToDocDir = "/the/path/to/log/to/"
-chNumStart = 1
-amount = 1
+startingChapterNum = 1
+amountOfChapters = 1
 thePrompt = """Please write a high-level outline for a book. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter. You can pick any title and genre you want."""
 fantasyAuthor = {
   "temp": 0.95,
@@ -86,7 +86,7 @@ fantasyAuthor = {
 # generative_fiction logic to write a book
 args = {
   "apiKey": theApiKey,
-  "gpt40Enabled": True,
+  "gpt40Enabled": False,
   "author": fantasyAuthor,
   "prompt": thePrompt,
   "gradeLevel": 10,
@@ -102,20 +102,18 @@ except:
   book["theEnd"] = False
 # generate the book
 print("Begin Generating Book...")
-chStart = chNumStart
-chEnd = chStart + amount
+chStart = startingChapterNum
+chEnd = chStart + amountOfChapters
 for chNum in range(chStart, chEnd):
   if book["theEnd"]:
     break
   book = generative_fiction.writeChapter(
-    chNum,
-    book,
-    args)
+    chNum, book, args)
   # save state to a file after each chapter
   f = open(pathToDocDir + 'book.json', 'w')
   json.dump(book, f)
   f.close()
-# write the conent to a file
+# write the content to a file
 content = book["title"]
 chapters = book["chapters"]
 sceneDivider="\n\n* * *\n\n"
