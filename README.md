@@ -75,7 +75,7 @@ import json
 # Constants
 theApiKey = "the_api_key_to_use"
 pathToDocDir = "/the/path/to/log/to/"
-chNumStart = 2
+chNumStart = 1
 amount = 1
 thePrompt = """Please write a high-level outline for a book. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter. You can pick any title and genre you want."""
 fantasyAuthor = {
