@@ -6,9 +6,6 @@ import urllib.request
 
 # https://medium.com/@chiaracoetzee/generating-a-full-length-work-of-fiction-with-gpt-4-4052cfeddef3
 
-book = {}
-settings =  {}
-
 chatModels = {
   "gpt35": {
     "id": "gpt-3.5-turbo",
@@ -26,182 +23,236 @@ chatModels = {
   }
 }
 
-helpfulAssistant = {
-  "temp": .8,
-  "descr": "You are a helpful assistant."
+defAuthor = {
+  "temp": 0.95,
+  "descr": """You are an aspiring author trying to write a fan-fiction book ."""
 }
 
-def writeBook(args):
-  theBook = {}
-  theBook["theEnd"] = False
-  # using a while loop because the total
-  #   number of chapters can change over
-  #   time.
-  while not theBook["theEnd"]:
-    chNum = 1
-    if "chapters" in theBook:
-      chNum = len(theBook["chapters"]) + 1
-    theBook = writeChapter(
-      chNum,
-      theBook,
-      args)
-  return theBook.copy()
+helpfulAssistant = {
+  "temp": .8,
+  "descr": """You are a helpful assistant."""
+}
 
-def writeChapter(chNum, save, args):
-  loadSettings(args)
-  gradeLevel = getGradeLevelAsInt()
-  book.clear()
-  book["continuity"] = ""
-  book["theEnd"] = False
-  book["chapters"] = {}
-  if chNum == 0:
-    return book.copy()
-  elif chNum == 1:
-    initOutlinePrompt = args["prompt"]
-    initLvl1Notes(initOutlinePrompt)
-  else:
-    debug("Loading Save State...")
-    loadSaveState(chNum, save)
-  if book["theEnd"]:
-    critical(p(p(p("The End"))))
-    return book.copy()
-  info("Writing next chapter:")
-  critical(
-    p(p(p("Chapter: " + str(chNum)))))
-  if isLastCh(chNum):
-    outlineFinalChapter()
-  else:
-    outlineChapter(chNum)
-  chDraft = getChatAuthorResp(
-    '''Ch {thisChNum} 1st Draft'''.format(
-      thisChNum = chNum
-    ),
-    [
-      getOutlinePrompt(),
-      getOutline(),
-      getProtagionistPrompt(),
-      getProtagionist(),
-      getChCharDescsPrompt(chNum),
-      getChCharDescs(chNum),
-      getChChronoPrompt(chNum),
-      getChChrono(chNum),
-      getChOutlinePrompt(chNum),
-      getChOutline(chNum),
-      getChContinuityPrompt(chNum),
-      getChContinuity(chNum),
-      '''Write a final draft of Chapter {thisChNum}. Use the following guidance:
+defLogger = logging.getLogger("default")
 
-Begin the final draft with the beginning of the first scene of Chapter {thisChNum}. Only include the contents of the scenes in the final draft of Chapter {thisChNum}. Seperate each scene with '\n\n***\n\n'. Finish the final draft immediately after the ending of the last scene of Chapter {thisChNum}.
+book = {}
+settings =  {}
 
-The final draft of Chapter {thisChNum} should set up the story for Chapter {nextChNum}, which will come immediately afterwards.
+class GenerativeFiction:
+  apiKey: str
+  gpt40Enabled: bool
+  author: dict
+  prompt: str
+  gradeLevel: int
+  logger: logging.Logger
+  
+  # class constructor
+  def __init__(
+    self,
+    apiKey: str = None,
+    gpt40Enabled: bool = True,
+    authorDesc: str = defAuthor["descr"],
+    authorTemp: float = defAuthor["temp"],
+    authorExclusions: list[str] = None,
+    prompt: str = None,
+    gradeLevel: int = 10,
+    logger: logging.Logger = defLogger):
+    self.apiKey=apiKey
+    self.gpt40Enabled=gpt40Enabled
+    author = {}
+    author["descr"] = authorDesc
+    author["temp"] = authorTemp
+    if authorExclusions is not None:
+      author["exclusions"]=authorExclusions
+    self.author = author
+    self.prompt = prompt
+    self.gradeLevel = gradeLevel
+    self.logger = logger
 
-Make sure that the chapter contains between {wordRangeLow} and {wordRangeHigh} words.
+  def writeBook(self):
+    theBook = {}
+    theBook["theEnd"] = False
+    # using a while loop because the total
+    #   number of chapters can change over
+    #   time.
+    while not theBook["theEnd"]:
+      chNum = 1
+      if "chapters" in theBook:
+        chNum = len(theBook["chapters"]) + 1
+      theBook = self.writeChapter(
+        chNum=chNum,
+        save=theBook)
+    return theBook.copy()
 
-Make sure to use a 'Show, dont tell' technique to show drama unfold on the page and place {theProtagionist}, the main charater, at the center of the story.
-
-Make sure to use vivid and specific details to make descriptions more interesting and memorable. Avoid generic and clichéd descriptions. 
-
-Make sure to be concise. Avoid long and drawn-out descriptions that slow down the pace of the story. Instead, choose specific details that are most important to the scene and use them to convey the desired mood or atmosphere.
-
-Make sure to write in an engaging narrative style.
-
-Make sure that the chapter is rewritten to a {thisGradeLevel} grade reading level.'''.format(
-        wordRangeLow = 250 * gradeLevel,
-        wordRangeHigh = 350 * gradeLevel,
-        theProtagionist = getProtagionist(),
-        thisChNum = chNum,
-        nextChNum = chNum + 1,
-        thisGradeLevel = gradeLevel
-      )
-    ]
-  )
-  info("Ch Draft:\n\n" + chDraft)
-  chDraftScenes = parseScenes(chDraft)
-  sceneCount = countScenes(
-    chNum,
-    chDraftScenes
-  )
-  chOutline = ""
-  for i in range(int(sceneCount)):
-    sceneDraft = chDraftScenes[i].strip()
-    sceneOutline = getChatAssistantResp(
-      "Return scenes outline",
-      [
-    '''Write a detailed outline of the following scene:"
-
-```
-{thisScene}
-```'''.format(
-        thisScene = sceneDraft)
-      ])
-    chOutline += '''
-
-Scene {thisSceneNum}:
-{thisSceneOutline}'''.format(
-      thisSceneNum=i+1,
-      thisSceneOutline=sceneOutline.strip()
+  def writeChapter(
+    self,
+    chNum: int,
+    save: dict,
+    firstPerson: bool = False):
+    loadSettings(
+      apiKey=self.apiKey,
+      gpt40Enabled=self.gpt40Enabled,
+      firstPerson=firstPerson,
+      author=self.author,
+      gradeLevel=self.gradeLevel,
+      logger=self.logger
     )
-  setChOutline(chNum, chOutline.strip())
-  chDraft = getChatAuthorResp(
-    '''Ch {thisChNum} 2nd Draft'''.format(
-      thisChNum = chNum
-    ),
-    [
-      getOutlinePrompt(),
-      getOutline(),
-      getProtagionistPrompt(),
-      getProtagionist(),
-      getChCharDescsPrompt(chNum),
-      getChCharDescs(chNum),
-      getChChronoPrompt(chNum),
-      getChChrono(chNum),
-      getChOutlinePrompt(chNum),
-      getChOutline(chNum),
-      getChContinuityPrompt(chNum),
-      getChContinuity(chNum),
-      '''Write a final draft of Chapter {thisChNum}. Use the following guidance:
-
-Begin the final draft with the beginning of the first scene of Chapter {thisChNum}. Only include the contents of the scenes in the final draft of Chapter {thisChNum}. Seperate each scene with '\n\n***\n\n'. Finish the final draft immediately after the ending of the last scene of Chapter {thisChNum}.
-
-The final draft of Chapter {thisChNum} should set up the story for Chapter {nextChNum}, which will come immediately afterwards.
-
-Make sure that the chapter contains between {wordRangeLow} and {wordRangeHigh} words.
-
-Make sure to use a 'Show, dont tell' technique to show drama unfold on the page and place the main charater at the center of the story.
-
-Make sure to use vivid and specific details to make descriptions more interesting and memorable. Avoid generic and clichéd descriptions. 
-
-Make sure to be concise. Avoid long and drawn-out descriptions that slow down the pace of the story. Instead, choose specific details that are most important to the scene and use them to convey the desired mood or atmosphere.
-
-Make sure to write in an engaging narrative style.
-
-Make sure that the chapter is rewritten to a {thisGradeLevel} grade reading level.'''.format(
-        wordRangeLow = 250 * gradeLevel,
-        wordRangeHigh = 350 * gradeLevel,
-        thisChNum = chNum,
-        nextChNum = chNum + 1,
-        thisGradeLevel = gradeLevel
-      )
-    ]
-  )
-  setChDraft(chNum, chDraft)
-  chDraftScenes = parseScenes(chDraft)
-  sceneCount = countScenes(
-    chNum,
-    chDraftScenes
-  )
-  scenes = []
-  for i in range(int(sceneCount)):
-    scene = writeScene(
+    book.clear()
+    book["continuity"] = ""
+    book["theEnd"] = False
+    book["chapters"] = {}
+    if chNum == 0:
+      return book.copy()
+    elif chNum == 1:
+      initOutlinePrompt = self.prompt
+      initLvl1Notes(initOutlinePrompt)
+    else:
+      debug("Loading Save State...")
+      loadSaveState(chNum, save)
+    if book["theEnd"]:
+      critical(p(p(p("The End"))))
+      return book.copy()
+    info("Writing next chapter:")
+    critical(
+      p(p(p("Chapter: " + str(chNum)))))
+    if isLastCh(chNum):
+      outlineFinalChapter()
+    else:
+      outlineChapter(chNum)
+    wordRangeLow = 250 * self.gradeLevel,
+    wordRangeHigh = 350 * self.gradeLevel,
+    chDraft = getChatAuthorResp(
+      '''Ch {chNum} 1st Draft'''.format(
+        chNum = chNum
+      ),
+      [
+        getOutlinePrompt(),
+        getOutline(),
+        getProtagionistPrompt(),
+        getProtagionist(),
+        getChCharDescsPrompt(chNum),
+        getChCharDescs(chNum),
+        getChChronoPrompt(chNum),
+        getChChrono(chNum),
+        getChOutlinePrompt(chNum),
+        getChOutline(chNum),
+        getChContinuityPrompt(chNum),
+        getChContinuity(chNum),
+        '''Write a final draft of Chapter {chNum}. Use the following guidance:
+  
+  Begin the final draft with the beginning of the first scene of Chapter {chNum}. Only include the contents of the scenes in the final draft of Chapter {chNum}. Seperate each scene with '\n\n***\n\n'. Finish the final draft immediately after the ending of the last scene of Chapter {chNum}.
+  
+  The final draft of Chapter {chNum} should set up the story for Chapter {nextChNum}, which will come immediately afterwards.
+  
+  Make sure that the chapter contains between {wordRangeLow} and {wordRangeHigh} words.
+  
+  Make sure to use a 'Show, dont tell' technique to show drama unfold on the page and place {protagionist}, the main charater, at the center of the story.
+  
+  Make sure to use vivid and specific details to make descriptions more interesting and memorable. Avoid generic and clichéd descriptions. 
+  
+  Make sure to be concise. Avoid long and drawn-out descriptions that slow down the pace of the story. Instead, choose specific details that are most important to the scene and use them to convey the desired mood or atmosphere.
+  
+  Make sure to write in an engaging narrative style.
+  
+  Make sure that the chapter is rewritten to a {gradeLevel} grade reading level.'''.format(
+          wordRangeLow=wordRangeLow,
+          wordRangeHigh=wordRangeHigh,
+          protagionist = getProtagionist(),
+          chNum = chNum,
+          nextChNum = chNum + 1,
+          gradeLevel = self.gradeLevel
+        )
+      ]
+    )
+    info("Ch Draft:\n\n" + chDraft)
+    chDraftScenes = parseScenes(chDraft)
+    sceneCount = countScenes(
       chNum,
-      i+1,
-      chDraftScenes)
-    scenes.append(scene)
-    if i > 1:
-      critical(p("* * *"))
-    critical(p(scene))
-  saveChapter(chNum, scenes)
-  return book.copy()
+      chDraftScenes
+    )
+    chOutline = ""
+    for i in range(int(sceneCount)):
+      sceneDraft = chDraftScenes[i].strip()
+      sceneOutline = getChatAssistantResp(
+        "Return scenes outline",
+        [
+      '''Write a detailed outline of the following scene:"
+  
+  ```
+  {sceneDraft}
+  ```'''.format(
+          sceneDraft = sceneDraft)
+        ])
+      chOutline += '''
+  
+  Scene {sceneNum}:
+  {sceneOutline}'''.format(
+        sceneNum=i+1,
+        sceneOutline=sceneOutline.strip()
+      )
+    setChOutline(chNum, chOutline.strip())
+    wordRangeLow = 250 * self.gradeLevel
+    wordRangeHigh = 350 * self.gradeLevel
+    chDraft = getChatAuthorResp(
+      '''Ch {chNum} 2nd Draft'''.format(
+        chNum = chNum
+      ),
+      [
+        getOutlinePrompt(),
+        getOutline(),
+        getProtagionistPrompt(),
+        getProtagionist(),
+        getChCharDescsPrompt(chNum),
+        getChCharDescs(chNum),
+        getChChronoPrompt(chNum),
+        getChChrono(chNum),
+        getChOutlinePrompt(chNum),
+        getChOutline(chNum),
+        getChContinuityPrompt(chNum),
+        getChContinuity(chNum),
+        '''Write a final draft of Chapter {chNum}. Use the following guidance:
+  
+  Begin the final draft with the beginning of the first scene of Chapter {chNum}. Only include the contents of the scenes in the final draft of Chapter {chNum}. Seperate each scene with '\n\n***\n\n'. Finish the final draft immediately after the ending of the last scene of Chapter {chNum}.
+  
+  The final draft of Chapter {chNum} should set up the story for Chapter {nextChNum}, which will come immediately afterwards.
+  
+  Make sure that the chapter contains between {wordRangeLow} and {wordRangeHigh} words.
+  
+  Make sure to use a 'Show, dont tell' technique to show drama unfold on the page and place the main charater at the center of the story.
+  
+  Make sure to use vivid and specific details to make descriptions more interesting and memorable. Avoid generic and clichéd descriptions. 
+  
+  Make sure to be concise. Avoid long and drawn-out descriptions that slow down the pace of the story. Instead, choose specific details that are most important to the scene and use them to convey the desired mood or atmosphere.
+  
+  Make sure to write in an engaging narrative style.
+  
+  Make sure that the chapter is rewritten to a {gradeLevel} grade reading level.'''.format(
+          wordRangeLow = wordRangeLow,
+          wordRangeHigh = wordRangeHigh,
+          chNum = chNum,
+          nextChNum = chNum + 1,
+          gradeLevel = self.gradeLevel
+        )
+      ]
+    )
+    setChDraft(chNum, chDraft)
+    chDraftScenes = parseScenes(chDraft)
+    sceneCount = countScenes(
+      chNum,
+      chDraftScenes
+    )
+    scenes = []
+    for i in range(int(sceneCount)):
+      scene = writeScene(
+        chNum,
+        i+1,
+        chDraftScenes)
+      scenes.append(scene)
+      if i > 1:
+        critical(p("* * *"))
+      critical(p(scene))
+    saveChapter(chNum, scenes)
+    return book.copy()
 
 def parseScenes(chDraft):
   chDraftScenes = chDraft.split("***")
@@ -218,16 +269,16 @@ def parseScenes(chDraft):
 
 def countScenes(chNum, chDraftScenes):
   sceneCount = getChatIntResp(
-    '''Count Ch {thisChNum} Scenes'''.format(
-      thisChNum = chNum
+    '''Count Ch {chNum} Scenes'''.format(
+      chNum = chNum
     ),
     [
       '''Count and return as an integer the total number of scenes in the following chapter:
 
 ```
-{thisChDraft}
+{chDraft}
 ```'''.format(
-        thisChDraft="***".join(chDraftScenes)
+        chDraft="***".join(chDraftScenes)
       )
     ]
   )
@@ -235,9 +286,9 @@ def countScenes(chNum, chDraftScenes):
     sceneCount = len(chDraftScenes)
   elif sceneCount > len(chDraftScenes):
     sceneCount = len(chDraftScenes)
-  info('''Ch {thisChNum} scene count: {thisSceneCount}'''.format(
-    thisChNum = chNum,
-    thisSceneCount = sceneCount
+  info('''Ch {chNum} scene count: {sceneCount}'''.format(
+    chNum = chNum,
+    sceneCount = sceneCount
   ))
   return sceneCount
 
@@ -249,28 +300,28 @@ def rewriteScene(chNum, sceneNum, chDraftScenes):
   if getGradeLevelAsInt() < 4:
     return sceneDraft
   firstParagraph = getChatAssistantResp(
-    '''Scene {thisSceneNum}: First Para'''.format(thisSceneNum=sceneNum),
+    '''Scene {sceneNum}: First Para'''.format(sceneNum=sceneNum),
     [
       '''Return only the first opening paragraph of the following scene:
 
 ```
-{thisScene}
+{sceneDraft}
 ```'''.format(
-    thisScene = sceneDraft)
+    sceneDraft = sceneDraft)
   ])
   info("First Opening paragraph:\n\n"+firstParagraph)
   lastParagraph = getChatAssistantResp(
-    '''Scene {thisSceneNum}: Last Para'''.format(thisSceneNum=sceneNum),
+    '''Scene {sceneNum}: Last Para'''.format(sceneNum=sceneNum),
     [
       '''Return only the last final paragraph of the following scene:"
 
 ```
-{thisScene}
+{sceneDraft}
 ```'''.format(
-    thisScene = sceneDraft)
+    sceneDraft = sceneDraft)
   ])
   info("Last Final paragraph:\n\n" + lastParagraph)
-  qualityControlPrompt = '''Please rewrite Scene {thisSceneNum} for Chapter {thisChNum} of my book to be a longer more detailed version. Use the following guidance:
+  qualityControlPrompt = '''Please rewrite Scene {sceneNum} for Chapter {chNum} of my book to be a longer more detailed version. Use the following guidance:
 
 Please make sure that you reuse at least 60% of the words in the original scene's text.
 
@@ -294,8 +345,8 @@ Make sure to finish with the scene's last closing paragraph.
 
 Make sure to only write one scene.
 '''.format(
-    thisSceneNum=sceneNum,
-    thisChNum=chNum,
+    sceneNum=sceneNum,
+    chNum=chNum,
     gradeLevel=getGradeLevelAsStr()
   )
   for _ in range(4):
@@ -310,19 +361,19 @@ Make sure to only write one scene.
         getChOutline(chNum),
         getChContinuityPrompt(chNum),
         getChContinuity(chNum),
-        '''Please write Scene {thisSceneNum} for Chapter {thisChNum} of my book.'''.format(
-          thisSceneNum=sceneNum,
-          thisChNum=chNum
+        '''Please write Scene {sceneNum} for Chapter {chNum} of my book.'''.format(
+          sceneNum=sceneNum,
+          chNum=chNum
         ),
         sceneDraft,
-        '''Return the first paragraph from Chapter {thisChNum} Scene {thisSceneNum} of my book.'''.format(
-          thisSceneNum=sceneNum,
-          thisChNum=chNum
+        '''Return the first paragraph from Chapter {chNum} Scene {sceneNum} of my book.'''.format(
+          sceneNum=sceneNum,
+          chNum=chNum
         ),
         firstParagraph,
-        '''Return the last paragraph from Chapter {thisChNum} Scene {thisSceneNum} of my book.'''.format(
-          thisSceneNum=sceneNum,
-          thisChNum=chNum
+        '''Return the last paragraph from Chapter {chNum} Scene {sceneNum} of my book.'''.format(
+          sceneNum=sceneNum,
+          chNum=chNum
         ),
         lastParagraph,
         qualityControlPrompt
@@ -350,11 +401,11 @@ def writeScene(
     sceneNum,
     chDraftScenes
   )
-  sceneContinuityNotesPrompt = '''Please briefly note any important details or facts from Scene {thisSceneNum} that you need to remember while writing the rest of Chapter {thisChNum} of my book, in order to ensure continuity and consistency throughout the chapter. Begin the continuity notes with the first continuity note from Scene {thisSceneNum}. Only include the continuity notes for Scene {thisSceneNum} in your response.
+  sceneContinuityNotesPrompt = '''Please briefly note any important details or facts from Scene {sceneNum} that you need to remember while writing the rest of Chapter {chNum} of my book, in order to ensure continuity and consistency throughout the chapter. Begin the continuity notes with the first continuity note from Scene {sceneNum}. Only include the continuity notes for Scene {sceneNum} in your response.
 
 Continuity Notes:'''.format(
-    thisChNum=chNum,
-    thisSceneNum=sceneNum
+    chNum=chNum,
+    sceneNum=sceneNum
   )
   sceneContinuity=getChatAssistantResp(
     "Scene Continuity Notes",
@@ -378,13 +429,13 @@ Continuity Notes:'''.format(
   )
   updatedChContinuity = '''{chContinuity}
 
-Scene {thisSceneNum} Continuity Notes:
+Scene {sceneNum} Continuity Notes:
 
-{thisSceneContinuity}
+{sceneContinuity}
   '''.format(
     chContinuity = getChContinuity(chNum),
-    thisSceneNum = sceneNum,
-    thisSceneContinuity = sceneContinuity
+    sceneNum = sceneNum,
+    sceneContinuity = sceneContinuity
   )
   setChContinuity(
     chNum,
@@ -512,8 +563,8 @@ def outlineChapter(chNum):
   setChContinuity(
     chNum,
     getChatAssistantResp(
-      '''Ch {thisChNum} Continuity'''.format(
-        thisChNum = chNum
+      '''Ch {chNum} Continuity'''.format(
+        chNum = chNum
       ),
       chat
     )
@@ -525,8 +576,8 @@ def outlineChapter(chNum):
   setChCharDescs(
     chNum,
     getChatAssistantResp(
-      '''Ch {thisChNum} Char Descs'''.format(
-        thisChNum = chNum
+      '''Ch {chNum} Char Descs'''.format(
+        chNum = chNum
       ),
       chat
     )
@@ -546,15 +597,15 @@ def outlineChapter(chNum):
     getChFinalScene(chNum),
     getChContinuityPrompt(chNum),
     getChContinuity(chNum),
-    '''For Chapter {thisChNum} of my book, write a detailed chapter outline taking into consideration my book's high-level outline, relevant characters and notable items, Chronology, Continuity Notes, and the Opening and Final scenes for Chapter {thisChNum}. The chapter outline must list all the scenes in the chapter and a short description of each. Begin the chapter outline with the Opening Scene from Chapter {thisChNum}, and finish the outline with the Final Scene from Chapter {thisChNum}.'''.format(
-      thisChNum = chNum
+    '''For Chapter {chNum} of my book, write a detailed chapter outline taking into consideration my book's high-level outline, relevant characters and notable items, Chronology, Continuity Notes, and the Opening and Final scenes for Chapter {chNum}. The chapter outline must list all the scenes in the chapter and a short description of each. Begin the chapter outline with the Opening Scene from Chapter {chNum}, and finish the outline with the Final Scene from Chapter {chNum}.'''.format(
+      chNum = chNum
     )
   ]
   setChOutline(
     chNum,
     getChatAssistantResp(
-      '''Ch {thisChNum} Outline'''.format(
-        thisChNum = chNum
+      '''Ch {chNum} Outline'''.format(
+        chNum = chNum
       ),
       chat
     )
@@ -615,8 +666,8 @@ def setBoundingScenes(chNum):
     openingScenePrompt
   ]
   for i in range(4):
-    action = '''Ch {thisChNum} Opening Scene'''.format(
-      thisChNum = chNum
+    action = '''Ch {chNum} Opening Scene'''.format(
+      chNum = chNum
     )
     if i > 0:
       action = "Rewrite " + action
@@ -631,8 +682,8 @@ def setBoundingScenes(chNum):
       )
       break
   for i in range(4):
-    action = '''Ch {thisChNum} Final Scene'''.format(
-      thisChNum = chNum
+    action = '''Ch {chNum} Final Scene'''.format(
+      chNum = chNum
     )
     if i > 0:
       action = "Rewrite " + action
@@ -852,7 +903,7 @@ def countTokens(messages):
   return tokens
   
 def rewriteInFirstPerson(content):
-  firstPersonPrompt = '''Rewrite the following content in first-person {theProtagionist}'s point of view. Use the following guidance:
+  firstPersonPrompt = '''Rewrite the following content in first-person {protagionist}'s point of view. Use the following guidance:
 
 Make sure that the total number of sentences in your rewrite at least matches the number of sentences in the original content's text.
 
@@ -875,17 +926,17 @@ The content to rewrite:
 {contentToRewrite}
 ```'''.format(
     contentToRewrite = content,
-    theProtagionist = getProtagionist(),
+    protagionist = getProtagionist(),
     gradeLevel = getGradeLevelAsStr()
   )
-  altFirstPersonPrompt = '''Rewrite the following scene in first-person from {theProtagionist}'s point of view.
+  altFirstPersonPrompt = '''Rewrite the following scene in first-person from {protagionist}'s point of view.
 
 Scene to rewrite:
 ```
 {contentToRewrite}
 ```'''.format(
     contentToRewrite = content,
-    theProtagionist = getProtagionist()
+    protagionist = getProtagionist()
   )
   for i in range(6):
     resp = ""
@@ -1155,8 +1206,8 @@ def updateCharDescs(chNum):
     getChChrono(chNum),
     getChScenesPrompt(chNum),
     getChScenes(chNum),
-    '''Please edit and update my book's lists of characters and notable items. Take into consideration my book's high-level outline, existing characters and notable items, Chronology, Continuity Notes, and draft of Chapter {thisChNum}. When listimg out characters please include a short descriptions of them. Also include a short description for each of the listed notable items.'''.format(
-      thisChNum = chNum
+    '''Please edit and update my book's lists of characters and notable items. Take into consideration my book's high-level outline, existing characters and notable items, Chronology, Continuity Notes, and draft of Chapter {chNum}. When listimg out characters please include a short descriptions of them. Also include a short description for each of the listed notable items.'''.format(
+      chNum = chNum
     )
   ]
   charDescs = getChatAssistantResp(
@@ -1248,11 +1299,11 @@ def saveChapter(chNum, scenes):
   chapter["bookCharDescs"] = charDescs
   continuity = updateContinuity(chNum)
   chapter["bookContinuity"] = continuity
-  debug("""Saving Chapter {thisChNum} as:
+  debug("""Saving Chapter {chNum} as:
 
-{thisChObj}""".format(
-    thisChNum = chNum,
-    thisChObj = chapter))
+{chObj}""".format(
+    chNum = chNum,
+    chObj = chapter))
 
 def loadSaveState(chNum, save):
   book.clear()
@@ -1272,38 +1323,34 @@ def loadSaveState(chNum, save):
   book["continuity"] = continuity
   book["theEnd"] = prevCh["isBookDone"]
 
-def loadSettings(args):
-  logger = logging.getLogger("default")
-  if "logger" in args:
-    logger = args["logger"]
+def loadSettings(
+  apiKey: str,
+  gpt40Enabled: bool,
+  firstPerson: bool,
+  author: dict,
+  gradeLevel: int,
+  logger: logging.Logger):
   settings["logger"] = logger
-  settings["apiKey"] = args["apiKey"]
+  settings["apiKey"] = apiKey
   settings["apiTimeout"] = 300
-  author = args["author"]
-  settings["author"] = author
-  settings["assistant"] = helpfulAssistant
-  gpt40Enabled = True
-  if "gpt40Enabled" in args:
-    gpt40Enabled = args["gpt40Enabled"]
+  settings["author"] = author.copy()
+  assistant = helpfulAssistant.copy()
+  settings["assistant"] = assistant
   if gpt40Enabled:
     notice("Chat GPT-4 is enabled.")
   else:
     notice("Chat GPT-4 is disabled.")
   settings["gpt40Enabled"] = gpt40Enabled
   perspective = "third-person"
-  if "firstPerson" in args:
-    if args["firstPerson"]:
-      perspective = "first-person"
+  if firstPerson:
+    perspective = "first-person"
   notice(
     "Setting perspective to: " + perspective)
   settings["perspective"] = perspective
-  if "gradeLevel" in args:
-    gradeLevel = args["gradeLevel"]
-    notice(
-      "Setting reading level to: grade " 
-      + str(gradeLevel)
-    )
-    settings["gradeLevel"] = str(gradeLevel)
+  notice(
+    "Setting reading level to: grade " 
+    + str(gradeLevel))
+  settings["gradeLevel"] = str(gradeLevel)
 
 def getChContinuityPrompt(chNum):
   return "Please briefly note any important details or facts from this book's Continuity Notes that you will need to remember while writing Chapter " + str(chNum) + " of my book, in order to ensure continuity and consistency. Label these Continuity Notes."
@@ -1343,8 +1390,8 @@ def updateChChrono(chNum):
   setChChrono(
     chNum,
     getChatAssistantResp(
-      '''Update Ch {thisChNum} Chrono'''.format(
-        thisChNum = chNum
+      '''Update Ch {chNum} Chrono'''.format(
+        chNum = chNum
       ),
       chat
     )
