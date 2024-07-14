@@ -51,19 +51,20 @@ class GenerativeFiction:
     self,
     apiKey: str = None,
     gpt40Enabled: bool = True,
-    authorDesc: str = defAuthor["descr"],
+    authorDescr: str = defAuthor["descr"],
     authorTemp: float = defAuthor["temp"],
-    authorExclusions: list[str] = None,
+    authorRespExclusions: list[str] = None,
     prompt: str = None,
     gradeLevel: int = 10,
     logger: logging.Logger = defLogger):
     self.apiKey=apiKey
     self.gpt40Enabled=gpt40Enabled
-    author = {}
-    author["descr"] = authorDesc
-    author["temp"] = authorTemp
-    if authorExclusions is not None:
-      author["exclusions"]=authorExclusions
+    author = {
+      "descr": authorDescr,
+      "temp": authorTemp}
+    if authorRespExclusions is not None:
+      exclusions = authorRespExclusions
+      author["respExclusion"] = exclusions
     self.author = author
     self.prompt = prompt
     self.gradeLevel = gradeLevel
@@ -738,7 +739,7 @@ def getChatIntResp(action, msgs):
   return -1
 
 def getChatAssistantResp(action, msgs):
-  temp = settings["assistant"]["temp"]
+  temp: float = settings["assistant"]["temp"]
   tokens = 0
   for msg in msgs:
     tokens += len(msg) / 4
@@ -749,13 +750,16 @@ def getChatAssistantResp(action, msgs):
   return getGpt35Resp(action, temp, msgs)
 
 def getChatAuthorResp(action, msgs):
-  temp = settings["author"]["temp"]
+  temp: float = settings["author"]["temp"]
   if not settings["gpt40Enabled"]:
     return getGpt35Resp(
       action, temp, msgs)
   return getGpt40Resp(action, temp, msgs)
 
-def getGpt35Resp(action, temp, msgs):
+def getGpt35Resp(
+  action: str,
+  temp: float,
+  msgs: list[str]):
   try:
     return getSafeGptResp(
       action,
@@ -768,7 +772,10 @@ def getGpt35Resp(action, temp, msgs):
     warn("***WARN: " + str(e))
     return ""
     
-def getGpt40Resp(action, temp, msgs):
+def getGpt40Resp(
+  action: str,
+  temp: float,
+  msgs: list[str]):
   try:
     return getSafeGptResp(
       action,
@@ -782,11 +789,11 @@ def getGpt40Resp(action, temp, msgs):
     return ""
 
 def getSafeGptResp(
-  action,
-  model,
-  temp,
-  sysRole,
-  msgs):
+  action: str,
+  model: str,
+  temp: float,
+  sysRole: str,
+  msgs: list[str]):
   chatMsgs = [sysRole]
   for msg in msgs:
     role = "user"
@@ -817,10 +824,10 @@ def getSafeGptResp(
       return "Failed Response Retry"
   
 def getGptResp(
-  action,
-  model,
-  temp,
-  msgs):
+  action: str,
+  model: str,
+  temp: float,
+  msgs: list[dict]):
   inputCost = model["pricing"]["input"]
   outputCost = model["pricing"]["output"]
   reqTokens = 0.0
