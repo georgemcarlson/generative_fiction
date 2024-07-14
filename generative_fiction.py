@@ -1,7 +1,8 @@
 import re
 import time
-from openai import OpenAI
 import logging
+import json
+import urllib.request
 
 # https://medium.com/@chiaracoetzee/generating-a-full-length-work-of-fiction-with-gpt-4-4052cfeddef3
 
@@ -751,8 +752,8 @@ def getSafeGptResp(
       temp,
       chatMsgs
     )
-  except:
-    notice("Rsp Failed")
+  except Exception as e:
+    notice("Rsp Failed: " + str(e))
     time.sleep(15)
     try:
       return getGptResp(
@@ -760,8 +761,8 @@ def getSafeGptResp(
         model,
         temp,
         chatMsgs)
-    except:
-      notice("Rsp Retry Failed")
+    except Exception as e:
+      notice("Rsp Retry Failed: " + str(e))
       return "Failed Response Retry"
   
 def getGptResp(
@@ -783,20 +784,33 @@ def getGptResp(
     + action
     + " Req Sent")
   reqStart = time.time()
-  client = OpenAI(
-    api_key = settings["apiKey"],
-    timeout = settings["apiTimeout"],
-    max_retries = 2
-  )
-  response = client.chat.completions.create(
-      model=model["id"],
-      messages=msgs,
-      temperature=temp)
-  respMsg = response.choices[0].message
-  respContent = respMsg.content
-  usage = response.usage
-  tokensIn = usage.prompt_tokens
-  tokensOut = usage.completion_tokens
+  reqUrl = "https://api.openai.com/v1/chat/completions"
+  reqAuth = "Bearer " + settings["apiKey"]
+  reqHeaders = {
+    "Content-Type": "application/json",
+    "Authorization": reqAuth}
+  reqParams = {
+    "model": model["id"],
+    "temperature": temp,
+    "messages": msgs}
+  postData= json.dumps(reqParams)
+  response = simplePostBodyRequest(
+    url=reqUrl,
+    headers=reqHeaders,
+    data=postData,
+    timeout=settings["apiTimeout"])
+#  response = requests.post(
+#    url=reqUrl,
+#    headers=reqHeaders,
+#    data=postData,
+#    timeout=settings["apiTimeout"]
+#  ).json()
+  respChoice = response["choices"][0]
+  respMsg = respChoice["message"]
+  respContent = respMsg["content"]
+  usage = response["usage"]
+  tokensIn = usage["prompt_tokens"]
+  tokensOut = usage["completion_tokens"]
   reqEnd = time.time()
   tokensInCost = tokensIn * inputCost
   tokensOutCost = tokensOut * outputCost
@@ -814,6 +828,22 @@ def getGptResp(
     + str(duration) + " secs"
   )
   return respContent
+
+def simplePostBodyRequest(
+  url: str,
+  headers: dict,
+  data: str,
+  timeout: int):
+  httprequest = urllib.request.Request(
+    url,
+    data=data.encode(),
+    method="POST",
+    headers=headers)
+  resp=urllib.request.urlopen(
+    httprequest,
+    timeout=timeout)
+  respData=resp.read().decode()
+  return json.loads(respData)
   
 def countTokens(messages):
   tokens = 0
