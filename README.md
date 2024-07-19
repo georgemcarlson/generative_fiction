@@ -69,7 +69,7 @@ authorDesc="""You are an aspiring author trying to write a fantasy genre fan fic
 # Configure generative_fiction
 gf = generative_fiction.GenerativeFiction(
   apiKey=theApiKey,
-  gpt40Enabled=False,
+  largeModel=False,
   authorDescr=authorDesc,
   authorTemp=0.95,
   prompt=thePrompt,
