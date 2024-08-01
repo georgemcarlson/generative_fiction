@@ -133,27 +133,22 @@ class GenerativeFiction:
     if self.isLastCh(chNum):
       self.outlineFinalChapter()
     else:
-      self.outlineChapter(chNum)
+      self.generateChOutline(chNum)
     wordRangeLow = 250 * self.gradeLevel,
     wordRangeHigh = 350 * self.gradeLevel,
-    chDraft = self.chatAuthorResp(
-      '''Ch {chNum} 1st Draft'''.format(
-        chNum = chNum
-      ),
-      [
-        self.getOutlinePrompt(),
-        self.getOutline(),
-        self.getProtagionistPrompt(),
-        self.getProtagionist(),
-        self.getChCharDescsPrompt(chNum),
-        self.getChCharDescs(chNum),
-        self.getChChronoPrompt(chNum),
-        self.getChChrono(chNum),
-        self.getChOutlinePrompt(chNum),
-        self.getChOutline(chNum),
-        self.getChContinuityPrompt(chNum),
-        self.getChContinuity(chNum),
-        '''Write a final draft of Chapter {chNum}. Use the following guidance:
+    ch1stDraftPrompts = []
+    ch1stDraftPrompts.extend(
+      self.getBookPrompts(chNum))
+    ch1stDraftPrompts.extend([
+      self.getChCharDescsPrompt(chNum),
+      self.getChCharDescs(chNum),
+      self.getChChronoPrompt(chNum),
+      self.getChChrono(chNum),
+      self.getChOutlinePrompt(chNum),
+      self.getChOutline(chNum),
+      self.getChContinuityPrompt(chNum),
+      self.getChContinuity(chNum),
+      '''Write a final draft of Chapter {chNum}. Use the following guidance:
   
   Begin the final draft with the beginning of the first scene of Chapter {chNum}. Only include the contents of the scenes in the final draft of Chapter {chNum}. Seperate each scene with '\n\n***\n\n'. Finish the final draft immediately after the ending of the last scene of Chapter {chNum}.
   
@@ -170,17 +165,18 @@ class GenerativeFiction:
   Make sure to write in an engaging narrative style.
   
   Make sure that the chapter is rewritten to a {gradeLevel} grade reading level.'''.format(
-          wordRangeLow=wordRangeLow,
-          wordRangeHigh=wordRangeHigh,
-          protagionist = self.getProtagionist(),
-          chNum = chNum,
-          nextChNum = chNum + 1,
-          gradeLevel = self.gradeLevel
-        )
-      ]
-    )
+        wordRangeLow=wordRangeLow,
+        wordRangeHigh=wordRangeHigh,
+        protagionist = self.getProtagionist(),
+        chNum = chNum,
+        nextChNum = chNum + 1,
+        gradeLevel = self.gradeLevel)])
+    chDraft = self.chatAuthorResp(
+      'Ch ' + str(chNum) + ' 1st Draft',
+      ch1stDraftPrompts)
     self.info("Ch Draft:\n\n" + chDraft)
-    chDraftScenes = self.parseScenes(chDraft)
+    chDraftScenes = self.parseScenes(
+      chDraft)
     sceneCount = self.countScenes(
       chNum,
       chDraftScenes)
@@ -209,24 +205,19 @@ class GenerativeFiction:
       chOutline.strip())
     wordRangeLow = 250 * self.gradeLevel
     wordRangeHigh = 350 * self.gradeLevel
-    chDraft = self.chatAuthorResp(
-      '''Ch {chNum} 2nd Draft'''.format(
-        chNum = chNum
-      ),
-      [
-        self.getOutlinePrompt(),
-        self.getOutline(),
-        self.getProtagionistPrompt(),
-        self.getProtagionist(),
-        self.getChCharDescsPrompt(chNum),
-        self.getChCharDescs(chNum),
-        self.getChChronoPrompt(chNum),
-        self.getChChrono(chNum),
-        self.getChOutlinePrompt(chNum),
-        self.getChOutline(chNum),
-        self.getChContinuityPrompt(chNum),
-        self.getChContinuity(chNum),
-        '''Write a final draft of Chapter {chNum}. Use the following guidance:
+    ch2ndDraftPrompts = []
+    ch2ndDraftPrompts.extend(
+      self.getBookPrompts(chNum))
+    ch2ndDraftPrompts.extend([
+      self.getChCharDescsPrompt(chNum),
+      self.getChCharDescs(chNum),
+      self.getChChronoPrompt(chNum),
+      self.getChChrono(chNum),
+      self.getChOutlinePrompt(chNum),
+      self.getChOutline(chNum),
+      self.getChContinuityPrompt(chNum),
+      self.getChContinuity(chNum),
+      '''Write a final draft of Chapter {chNum}. Use the following guidance:
   
   Begin the final draft with the beginning of the first scene of Chapter {chNum}. Only include the contents of the scenes in the final draft of Chapter {chNum}. Seperate each scene with '\n\n***\n\n'. Finish the final draft immediately after the ending of the last scene of Chapter {chNum}.
   
@@ -243,30 +234,37 @@ class GenerativeFiction:
   Make sure to write in an engaging narrative style.
   
   Make sure that the chapter is rewritten to a {gradeLevel} grade reading level.'''.format(
-          wordRangeLow = wordRangeLow,
-          wordRangeHigh = wordRangeHigh,
-          chNum = chNum,
-          nextChNum = chNum + 1,
-          gradeLevel = self.gradeLevel
-        )
-      ]
-    )
+        wordRangeLow = wordRangeLow,
+        wordRangeHigh = wordRangeHigh,
+        chNum = chNum,
+        nextChNum = chNum + 1,
+        gradeLevel = self.gradeLevel)])
+    chDraft = self.chatAuthorResp(
+      'Ch ' + str(chNum) + ' 2nd Draft',
+      ch2ndDraftPrompts)
     self.setChDraft(chNum, chDraft)
-    chDraftScenes = self.parseScenes(chDraft)
+    chDraftScenes = self.parseScenes(
+      chDraft)
     sceneCount = self.countScenes(
       chNum,
       chDraftScenes)
-    scenes = []
+    chFinalScenes = []
     for i in range(int(sceneCount)):
       scene = self.writeScene(
         chNum,
         i+1,
-        chDraftScenes)
-      scenes.append(scene)
+        chDraftScenes,
+        chFinalScenes)
+      chFinalScenes.append(scene)
       if i > 1:
         self.critical(p("* * *"))
       self.critical(p(scene))
-    self.saveChapter(chNum, scenes)
+    self.updateChOutline(
+      chNum, chFinalScenes)
+    self.updateOutline(
+      chNum, chFinalScenes)
+    self.saveChapter(
+      chNum, chFinalScenes)
     return self.book.copy()
 
   def parseScenes(
@@ -280,9 +278,29 @@ class GenerativeFiction:
         continue
       if scene.strip().startswith("Chapter"):
         continue
-      cleanScenes.append(scene.strip())
+      cleanScene = self.parseScene(scene)
+      cleanScenes.append(cleanScene)
     return cleanScenes
 
+  def parseScene(self, scene: str):
+    paragraphs = []
+    for paragraph in scene.split("\n\n"):
+      if len(paragraphs) > 1:
+        paragraphs.append(paragraph)
+        continue
+      if len(paragraph.strip()) < 50:
+        continue
+      if "Chapter" in paragraph:
+        continue
+      if "chapter" in paragraph:
+        continue
+      if "Scene" in paragraph:
+        continue
+      if "scene" in paragraph:
+        continue
+      paragraphs.append(paragraph)
+    return "\n\n".join(paragraphs).strip()
+    
   def countScenes(
     self,
     chNum: int,
@@ -314,7 +332,8 @@ class GenerativeFiction:
     self,
     chNum: int,
     sceneNum: int,
-    chDraftScenes: list[str]):
+    chDraftScenes: list[str],
+    chFinalScenes: list[str]):
     sceneCount = len(chDraftScenes)
     chLen = self.getTargetChapterLength()
     sceneLen= chLen / sceneCount
@@ -370,38 +389,45 @@ class GenerativeFiction:
       sceneNum=sceneNum,
       chNum=chNum,
       gradeLevel=self.getGradeLevelAsStr())
+    rewriteScenePrompts = []
+    rewriteScenePrompts.extend(
+      self.getBookPrompts(chNum))
+    rewriteScenePrompts.extend([
+      self.getChCharDescsPrompt(chNum),
+      self.getChCharDescs(chNum),
+      self.getChChronoPrompt(chNum),
+      self.getChChrono(chNum),
+      self.getChOutlinePrompt(chNum),
+      self.getChOutline(chNum),
+      self.getChContinuityPrompt(chNum),
+      self.getChContinuity(chNum)])
+    if len(chFinalScenes) > 0:
+        rewriteScenePrompts.extend([
+          """Please write the prior {sceneCount} Scenes for Chapter {chNum} of my book. Seperate each scene with '\n\n***\n\n'.""".format(
+            sceneCount=len(chFinalScenes),
+            chNum=chNum),
+          p(p("***")).join(chFinalScenes)])
+    rewriteScenePrompts.extend([
+      '''Please write Scene {sceneNum} for Chapter {chNum} of my book.'''.format(
+        sceneNum=sceneNum,
+        chNum=chNum),
+      sceneDraft,
+      '''Return the first paragraph from Chapter {chNum} Scene {sceneNum} of my book.'''.format(
+        sceneNum=sceneNum,
+        chNum=chNum),
+      firstParagraph,
+      '''Return the last paragraph from Chapter {chNum} Scene {sceneNum} of my book.'''.format(
+        sceneNum=sceneNum,
+        chNum=chNum),
+      lastParagraph,
+      qualityControlPrompt])
     for _ in range(4):
       scene = self.chatAuthorResp(
         "Rewrite Scene " + str(sceneNum),
-        [
-          self.getChCharDescsPrompt(chNum),
-          self.getChCharDescs(chNum),
-          self.getChChronoPrompt(chNum),
-          self.getChChrono(chNum),
-          self.getChOutlinePrompt(chNum),
-          self.getChOutline(chNum),
-          self.getChContinuityPrompt(chNum),
-          self.getChContinuity(chNum),
-          '''Please write Scene {sceneNum} for Chapter {chNum} of my book.'''.format(
-            sceneNum=sceneNum,
-            chNum=chNum
-          ),
-          sceneDraft,
-          '''Return the first paragraph from Chapter {chNum} Scene {sceneNum} of my book.'''.format(
-            sceneNum=sceneNum,
-            chNum=chNum
-          ),
-          firstParagraph,
-          '''Return the last paragraph from Chapter {chNum} Scene {sceneNum} of my book.'''.format(
-            sceneNum=sceneNum,
-            chNum=chNum
-          ),
-          lastParagraph,
-          qualityControlPrompt
-        ]
-      )
+        rewriteScenePrompts)
       self.debug("QC Scene:\n\n" + scene)
-      if len(scene) < float(len(sceneDraft)) * 0.9:
+      minLen = float(len(sceneDraft)) * 0.9
+      if len(scene) < minLen:
         continue
       if not "\n" in scene.strip():
         continue
@@ -417,37 +443,35 @@ class GenerativeFiction:
     self,
     chNum: int,
     sceneNum: int,
-    chDraftScenes: list[str]):
+    chDraftScenes: list[str],
+    chFinalScenes: list[str]):
     scene = self.rewriteScene(
       chNum,
       sceneNum,
-      chDraftScenes)
+      chDraftScenes,
+      chFinalScenes)
     sceneContinuityNotesPrompt = '''Please briefly note any important details or facts from Scene {sceneNum} that you need to remember while writing the rest of Chapter {chNum} of my book, in order to ensure continuity and consistency throughout the chapter. Begin the continuity notes with the first continuity note from Scene {sceneNum}. Only include the continuity notes for Scene {sceneNum} in your response.
   
   Continuity Notes:'''.format(
       chNum=chNum,
       sceneNum=sceneNum)
+    sceneContinuityPrompts = []
+    sceneContinuityPrompts.extend(
+      self.getBookPrompts(chNum))
+    sceneContinuityPrompts.extend([
+      self.getChCharDescsPrompt(chNum),
+      self.getChCharDescs(chNum),
+      self.getChChronoPrompt(chNum),
+      self.getChChrono(chNum),
+      self.getChDraftPrompt(chNum),
+      self.getChDraft(chNum),
+      self.getScenePrompt(
+        chNum, sceneNum),
+      scene,
+      sceneContinuityNotesPrompt])
     sceneContinuity=self.chatAssistantResp(
       "Scene Continuity Notes",
-      [
-        self.getOutlinePrompt(),
-        self.getOutline(),
-        self.getProtagionistPrompt(),
-        self.getProtagionist(),
-        self.getChCharDescsPrompt(chNum),
-        self.getChCharDescs(chNum),
-        self.getChChronoPrompt(chNum),
-        self.getChChrono(chNum),
-        self.getChDraftPrompt(chNum),
-        self.getChDraft(chNum),
-        self.getContinuityPrompt(),
-        self.getContinuity(),
-        self.getScenePrompt(
-          chNum, sceneNum),
-        scene,
-        sceneContinuityNotesPrompt
-      ]
-    )
+      sceneContinuityPrompts)
     updatedChContinuity = '''{chContinuity}
   
   Scene {sceneNum} Continuity Notes:
@@ -466,25 +490,19 @@ class GenerativeFiction:
     
   def outlineFinalChapter(self):
     chNum = self.getChCount()
-    self.updateChChrono(chNum)
+    self.generateChChrono(chNum)
     finalChContinuityPrompt = '''Please briefly note any important details or facts from this book's Continuity Notes that you will need to remember while writing the Final Chapter of my book, in order to ensure continuity and consistency. Label these Continuity Notes. Make sure to remember that the Final Chapter of my book will conclude my book.'''
     finalChCharDescsPrompt = '''Please print out a list of my book's relevant characters, with short descriptions, that you will need to know about to write the Final Chapter of my book taking into consideration my book's high-level outline, characters and notable items, Chronology, Continuity Notes. Also list any notable items or objects in the story, with short descriptions, that you will need to know about to write the Final Chapter of my book. Make sure to remember that the Final Chapter of my book will conclude my book.'''
     finalChOpeningScenePrompt = '''For the Final Chapter of my book, please write a detailed outline describing the first, opening scene taking into consideration my book's high-level outline, relevant characters and notable items, Chronology, and Continuity Notes. It should describe what happens in that opening scene and set up the story for the rest of the book. Do not summarize the entire chapter, only the first scene. The opening scene of the Final Chapter should directly follow the final scene of Chapter {prevChNum}'''.format(prevChNum = chNum -1)
     finalChFinalScenePrompt = '''For the Final Chapter of my book, write a detailed outline describing the final, last scene of the chapter taking into consideration my book's high-level outline, relevant characters and notable items, Chronology, and Continuity Notes. It should describe what happens at the very end of the chapter, and conclude the book.'''
     finalChOutlinePrompt = '''For the Final Chapter of my book, write a detailed chapter outline taking into consideration my book's high-level outline, relevant characters and notable items, Chronology, Continuity Notes, and the Opening and Final scenes for the Final Chapter. The chapter outline must list all the scenes in the chapter and a short description of each. Begin the chapter outline with the Opening Scene from the Final Chapter, and finish the outline with the Final Scene from the Final Chapter. This chapter outline must conclude the book.'''
-    chat = [
-      self.getOutlinePrompt(),
-      self.getOutline(),
-      self.getProtagionistPrompt(),
-      self.getProtagionist(),
-      self.getCharDescsPrompt(),
-      self.getCharDescs(),
+    chat = []
+    chat.extend(
+      self.getBookPrompts(chNum))
+    chat.extend([
       self.getChChronoPrompt(chNum),
       self.getChChrono(chNum),
-      self.getContinuityPrompt(),
-      self.getContinuity(),
-      finalChContinuityPrompt
-    ]
+      finalChContinuityPrompt])
     self.setChContinuity(
       chNum,
       self.chatAssistantResp(
@@ -498,91 +516,106 @@ class GenerativeFiction:
       self.chatAssistantResp(
         "Final Ch Char Descrs",
         chat))
+    chOpenScenePrompts = []
+    chOpenScenePrompts.extend(
+      self.getBookPrompts(chNum))
+    chOpenScenePrompts.extend([
+      finalChCharDescsPrompt,
+      self.getChCharDescs(chNum),
+      self.getChChronoPrompt(chNum),
+      self.getChChrono(chNum),
+      finalChContinuityPrompt,
+      self.getChContinuity(chNum),
+      finalChOpeningScenePrompt])
     chOpenScene = self.chatAssistantResp(
       "Final Ch Opening Scene",
-      [
-        self.getOutlinePrompt(),
-        self.getOutline(),
-        self.getProtagionistPrompt(),
-        self.getProtagionist(),
-        finalChCharDescsPrompt,
-        self.getChCharDescs(chNum),
-        self.getChChronoPrompt(chNum),
-        self.getChChrono(chNum),
-        finalChContinuityPrompt,
-        self.getChContinuity(chNum),
-        finalChOpeningScenePrompt
-      ]
-    )
+      chOpenScenePrompts)
+    chFinalScenePrompts = []
+    chFinalScenePrompts.extend(
+      self.getBookPrompts(chNum))
+    chFinalScenePrompts.extend([
+      finalChCharDescsPrompt,
+      self.getChCharDescs(chNum),
+      self.getChChronoPrompt(chNum),
+      self.getChChrono(chNum),
+      finalChContinuityPrompt,
+      self.getChContinuity(chNum),
+      finalChOpeningScenePrompt,
+      chOpenScene,
+      finalChFinalScenePrompt])
     chFinalScene = self.chatAssistantResp(
       "Final Ch Final Scene",
-      [
-        self.getOutlinePrompt(),
-        self.getOutline(),
-        self.getProtagionistPrompt(),
-        self.getProtagionist(),
-        finalChCharDescsPrompt,
-        self.getChCharDescs(chNum),
-        self.getChChronoPrompt(chNum),
-        self.getChChrono(chNum),
-        finalChContinuityPrompt,
-        self.getChContinuity(chNum),
-        finalChOpeningScenePrompt,
-        chOpenScene,
-        finalChFinalScenePrompt
-      ]
-    )
+      chFinalScenePrompts)
+    chOutlinePrompts = []
+    chOutlinePrompts.extend(
+      self.getBookPrompts(chNum))
+    chOutlinePrompts.extend([
+      finalChCharDescsPrompt,
+      self.getChCharDescs(chNum),
+      self.getChChronoPrompt(chNum),
+      self.getChChrono(chNum),
+      finalChContinuityPrompt,
+      self.getChContinuity(chNum),
+      finalChOpeningScenePrompt,
+      chOpenScene,
+      finalChFinalScenePrompt,
+      chFinalScene,
+      finalChOutlinePrompt])
     self.setChOutline(
       chNum,
       self.chatAssistantResp(
         "Final Ch Outline",
-        [
-          self.getOutlinePrompt(),
-          self.getOutline(),
-          self.getProtagionistPrompt(),
-          self.getProtagionist(),
-          finalChCharDescsPrompt,
-          self.getChCharDescs(chNum),
-          self.getChChronoPrompt(chNum),
-          self.getChChrono(chNum),
-          finalChContinuityPrompt,
-          self.getChContinuity(chNum),
-          finalChOpeningScenePrompt,
-          chOpenScene,
-          finalChFinalScenePrompt,
-          chFinalScene,
-          finalChOutlinePrompt
-        ]
-      )
-    )
-    
-  def outlineChapter(
+        chOutlinePrompts))
+  
+  def updateChOutline(
     self,
-    chNum: int):
-    self.updateChChrono(chNum)
-    self.setBoundingScenes(chNum)
-    chat = [
-      self.getOutlinePrompt(),
-      self.getOutline(),
-      self.getProtagionistPrompt(),
-      self.getProtagionist(),
-      self.getContinuityPrompt(),
-      self.getContinuity(),
-      self.getCharDescsPrompt(),
-      self.getCharDescs(),
+    chNum: int,
+    chFinalScenes: list[str]):
+    # todo:
+    #   updateChChrono
+    #   updateChBoundingScenes
+    #   updateChContinuity
+    #   updateChCharDescs
+    chat = []
+    chat.extend(
+      self.getBookPrompts(chNum))
+    chat.extend([
+      self.getChCharDescsPrompt(chNum),
+      self.getChCharDescs(chNum),
       self.getChChronoPrompt(chNum),
       self.getChChrono(chNum),
-      self.getChContinuityPrompt(chNum)
-    ]
+      self.getChOpeningScenePrompt(chNum),
+      self.getChOpeningScene(chNum),
+      self.getChFinalScenePrompt(chNum),
+      self.getChFinalScene(chNum),
+      self.getChContinuityPrompt(chNum),
+      self.getChContinuity(chNum),
+      """Please write Chapter {chNum} of my book. Seperate each scene with '\n\n***\n\n'.""".format(chNum=chNum),
+      p(p("***")).join(chFinalScenes),
+      '''For Chapter {chNum} of my book, write a detailed chapter outline. The chapter outline must list all the scenes in the chapter and a short description of each. Begin the chapter outline with the Opening Scene from Chapter {chNum}, and finish the outline with the Final Scene from Chapter {chNum}.'''.format(chNum = chNum)])
+    self.setChOutline(
+      chNum,
+      self.chatAssistantResp(
+        'Ch '+str(chNum)+' Outline',
+        chat))
+  
+  def generateChOutline(
+    self,
+    chNum: int):
+    self.generateChChrono(chNum)
+    self.setBoundingScenes(chNum)
+    chat = []
+    chat.extend(
+      self.getBookPrompts(chNum))
+    chat.extend([
+      self.getChChronoPrompt(chNum),
+      self.getChChrono(chNum),
+      self.getChContinuityPrompt(chNum)])
     self.setChContinuity(
       chNum,
       self.chatAssistantResp(
-        '''Ch {chNum} Continuity'''.format(
-          chNum = chNum
-        ),
-        chat
-      )
-    )
+        'Ch '+str(chNum)+' Continuity',
+        chat))
     chat.extend([
       self.getChContinuity(chNum),
       self.getChCharDescsPrompt(chNum)
@@ -590,17 +623,12 @@ class GenerativeFiction:
     self.setChCharDescs(
       chNum,
       self.chatAssistantResp(
-        '''Ch {chNum} Char Descs'''.format(
-          chNum = chNum
-        ),
-        chat
-      )
-    )
-    chat = [
-      self.getOutlinePrompt(),
-      self.getOutline(),
-      self.getProtagionistPrompt(),
-      self.getProtagionist(),
+        'Ch '+str(chNum)+' Char Descs',
+        chat))
+    chat = []
+    chat.extend(
+      self.getBookPrompts(chNum))
+    chat.extend([
       self.getChCharDescsPrompt(chNum),
       self.getChCharDescs(chNum),
       self.getChChronoPrompt(chNum),
@@ -612,16 +640,12 @@ class GenerativeFiction:
       self.getChContinuityPrompt(chNum),
       self.getChContinuity(chNum),
       '''For Chapter {chNum} of my book, write a detailed chapter outline taking into consideration my book's high-level outline, relevant characters and notable items, Chronology, Continuity Notes, and the Opening and Final scenes for Chapter {chNum}. The chapter outline must list all the scenes in the chapter and a short description of each. Begin the chapter outline with the Opening Scene from Chapter {chNum}, and finish the outline with the Final Scene from Chapter {chNum}.'''.format(chNum = chNum)
-    ]
+    ])
     self.setChOutline(
       chNum,
       self.chatAssistantResp(
-        '''Ch {chNum} Outline'''.format(
-          chNum = chNum
-        ),
-        chat
-      )
-    )
+        'Ch '+str(chNum)+' Outline',
+        chat))
   
   def initLvl1Notes(
     self,
@@ -672,19 +696,13 @@ class GenerativeFiction:
       finalScenePrompt += """The final scene of Chapter {chNum} should directly proceed the opening scene of Chapter {nextChNum}""".format(
       chNum = chNum,
       nextChNum = chNum + 1)
-    chat = [
-      self.getOutlinePrompt(),
-      self.getOutline(),
-      self.getProtagionistPrompt(),
-      self.getProtagionist(),
-      self.getContinuityPrompt(),
-      self.getContinuity(),
-      self.getCharDescsPrompt(),
-      self.getCharDescs(),
+    chat = []
+    chat.extend(
+      self.getBookPrompts(chNum))
+    chat.extend([
       self.getChChronoPrompt(chNum),
       self.getChChrono(chNum),
-      openingScenePrompt
-    ]
+      openingScenePrompt])
     for i in range(4):
       action = '''Ch {chNum} Opening Scene'''.format(
         chNum = chNum
@@ -733,6 +751,42 @@ class GenerativeFiction:
         return int(respStr)
     self.warn("***Unable to parse int from chat response.")
     return -1
+    
+  def getBookPrompts(self, chNum):
+    bookPrompts = [
+      self.getOutlinePrompt(),
+      self.getOutline(),
+      self.getProtagionistPrompt(),
+      self.getProtagionist(),
+      self.getContinuityPrompt(),
+      self.getContinuity(),
+      self.getCharDescsPrompt(),
+      self.getCharDescs()]
+    if chNum > 2:
+      for i in range(1, chNum - 2):
+        bookPrompts.extend([
+          '''Please write the chapter outline for Chapter {chNum} of my book.'''.format(chNum=i),
+          self.getChOutline(i)])
+    if chNum > 1:
+      bookPrompts.extend([
+        '''Please write Chapter {chNum} of my book.'''.format(chNum=chNum-1),
+          self.getChScenes(chNum-1)])
+    return bookPrompts
+
+  def getChDraftPrompts(self, chNum):
+    chDraftPrompts = []
+    chDraftPrompts.extend(
+      self.getBookPrompts(chNum))
+    chDraftPrompts.extend([
+      self.getChCharDescsPrompt(chNum),
+      self.getChCharDescs(chNum),
+      self.getChChronoPrompt(chNum),
+      self.getChChrono(chNum),
+      self.getChOutlinePrompt(chNum),
+      self.getChOutline(chNum),
+      self.getChContinuityPrompt(chNum),
+      self.getChContinuity(chNum)])
+    return chDraftPrompts
   
   def chatAssistantResp(
     self,
@@ -1080,58 +1134,31 @@ class GenerativeFiction:
   def getOutline(self):
     return self.book["outline"]
   
-  def initOutline(self, outline):
-    if "highLevelOutline" not in self.book:
+  def initOutline(self, outline: str):
+    if "outline" not in self.book:
       self.info("Setting initial book outline to:\n\n" + outline)
       self.book["outline"] = outline
     
   def updateOutline(
     self,
-    chNum: int):
-    for i in range(4):
-      chat = [
-        self.getOutlinePrompt(),
-        self.getOutline(),
-        self.getProtagionistPrompt(),
-        self.getProtagionist(),
-        self.getContinuityPrompt(),
-        self.getContinuity(),
-        self.getCharDescsPrompt(),
-        self.getCharDescs(),
-        self.getChChronoPrompt(chNum),
-        self.getChChrono(chNum),
-        self.getChScenesPrompt(chNum),
-        self.getChScenes(chNum),
-        """Please edit and update my book's' high-level outline, taking into consideration my book's characters and notable items, Chronology, Continuity Notes, and draft of Chapter {chNum}. Print out the updated high-level outline for my book. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter.""".format(chNum=chNum)
-      ]
-      action = "Update Book Outline"
-      if i > 0:
-        action = "Retry " + action
-      outline = self.chatAssistantResp(
-        action,
-        chat)
-      chat = [
-        self.getOutlinePrompt(),
-        outline,
-        """Count and return as an integer the total number of chaters in my book's outline."""
-      ]
-      chCount = self.getChatIntResp(
-        "Count Chapters",
-        chat)
-      if chCount >= self.getChCount():
-        self.setOutline(outline)
-        self.debug(
-          p("Setting chapter count to:") +
-          p(str(chCount))
-        )
-        self.book["chCount"] = str(chCount)
-        break
-  
-  def setOutline(
-    self,
-    outline: str):
-    self.debug("Setting book outline to:\n\n" + outline)
+    chNum: int,
+    chFinalScenes: list[str]):
+    chat = []
+    chat.extend(
+      self.getBookPrompts(chNum))
+    chat.extend([
+      self.getChChronoPrompt(chNum),
+      self.getChChrono(chNum),
+      """Please write Chapter {chNum} of my book. Seperate each scene with '\n\n***\n\n'.""".format(chNum=chNum),
+      p(p("***")).join(chFinalScenes),
+      """Please edit and update my book's high-level outline, taking into consideration my book's characters and notable items, Chronology, Continuity Notes, and draft of Chapter {chNum}. Print out the updated high-level outline for my book. Include a list of characters and a short description of each character. Include a list of chapters and a short summary of what happens in each chapter.""".format(chNum=chNum)])
+    outline = self.chatAssistantResp(
+      "Update Book Outline",
+      chat)
+    self.debug(
+      "Setting book outline to:\n\n" + outline)
     self.book["outline"] = outline
+    self.updateChCount()
     
   def getCharDescsPrompt(self):
     return """Please print out a list of my book's characters, with short descriptions of them, and all settings in the story, with short descriptions. Also list any notable items or objects in the story, with short descriptions."""
@@ -1170,25 +1197,20 @@ class GenerativeFiction:
     chContPrompt = '''Please briefly note any important details or facts from Chapter {chNum} that you need to remember while writing the rest of my book, in order to ensure continuity and consistency.'''.format(
       chNum=chNum
     )
+    chContinuityPrompts = []
+    chContinuityPrompts.extend(
+      self.getBookPrompts(chNum))
+    chContinuityPrompts.extend([
+      self.getChChronoPrompt(chNum),
+      self.getChChrono(chNum),
+      self.getChDraftPrompt(chNum),
+      self.getChDraft(chNum),
+      chContPrompt])
     self.setChContinuity(
       chNum,
       self.chatAssistantResp(
         "Update Chapter Continuity",
-        [
-          self.getOutlinePrompt(),
-          self.getOutline(),
-          self.getProtagionistPrompt(),
-          self.getProtagionist(),
-          self.getCharDescsPrompt(),
-          self.getCharDescs(),
-          self.getChChronoPrompt(chNum),
-          self.getChChrono(chNum),
-          self.getChDraftPrompt(chNum),
-          self.getChDraft(chNum),
-          chContPrompt
-         ]
-      )
-    )
+        chContinuityPrompts))
     continuity = ""
     if chNum > 5:
       condCont=""
@@ -1219,21 +1241,15 @@ class GenerativeFiction:
   def updateCharDescs(
     self,
     chNum: int):
-    chat = [
-      self.getOutlinePrompt(),
-      self.getOutline(),
-      self.getProtagionistPrompt(),
-      self.getProtagionist(),
-      self.getContinuityPrompt(),
-      self.getContinuity(),
-      self.getCharDescsPrompt(),
-      self.getCharDescs(),
+    chat = []
+    chat.extend(
+      self.getBookPrompts(chNum))
+    chat.extend([
       self.getChChronoPrompt(chNum),
       self.getChChrono(chNum),
       self.getChScenesPrompt(chNum),
       self.getChScenes(chNum),
-      '''Please edit and update my book's lists of characters and notable items. Take into consideration my book's high-level outline, existing characters and notable items, Chronology, Continuity Notes, and draft of Chapter {chNum}. When listimg out characters please include a short descriptions of them. Also include a short description for each of the listed notable items.'''.format(chNum=chNum)
-    ]
+      '''Please edit and update my book's lists of characters and notable items. Take into consideration my book's high-level outline, existing characters and notable items, Chronology, Continuity Notes, and draft of Chapter {chNum}. When listimg out characters please include a short descriptions of them. Also include a short description for each of the listed notable items.'''.format(chNum=chNum)])
     charDescs=self.chatAssistantResp(
       "Update Char Descrs",
       chat)
@@ -1321,9 +1337,10 @@ class GenerativeFiction:
     chapter["scenes"] = scenes
     chapter["bookCost"] = self.book["cost"]
     chapter["bookTitle"] = self.book["title"]
-    #updateOutline(chNum)
-    outline = self.getOutline()
-    chapter["bookOutline"] = outline
+    bookOutline = self.getOutline()
+    chapter["bookOutline"] = bookOutline
+    chOutlines = self.getChOutlines().copy()
+    chapter["bookChOutlines"] = chOutlines
     bookChCount = self.getChCount()
     chapter["bookChCount"] = bookChCount
     bookIsDone = self.isLastCh(chNum)
@@ -1332,11 +1349,7 @@ class GenerativeFiction:
     chapter["bookProtagionist"] = protag
     chapter["bookCharDescs"] = self.updateCharDescs(chNum)
     chapter["bookContinuity"] = self.updateContinuity(chNum)
-    self.debug("""Saving Chapter {chNum} as:
-  
-  {chObj}""".format(
-      chNum = chNum,
-      chObj = chapter))
+    self.debug("Saving Ch "+str(chNum))
   
   def loadSaveState(
     self,
@@ -1348,8 +1361,10 @@ class GenerativeFiction:
     prevCh = self.getChapter(chNum - 1)
     self.book["cost"] = prevCh["bookCost"]
     self.book["title"] = prevCh["bookTitle"]
-    outline = prevCh["bookOutline"]
-    self.book["outline"] = outline
+    bookOutline = prevCh["bookOutline"]
+    self.book["outline"] = bookOutline
+    chOutlines = prevCh["bookChOutlines"]
+    self.book["chOutlines"] = chOutlines
     chCount = prevCh["bookChCount"]
     self.book["chCount"] = chCount
     protag = prevCh["bookProtagionist"]
@@ -1415,24 +1430,19 @@ class GenerativeFiction:
     key="ch" + str(chNum) + "CharDescs"
     return self.book[key]
   
-  def updateChChrono(
+  def generateChChrono(
     self,
     chNum: int):
     chronoPrompt = """Please print out the relevant chronological events that you will need to know about to write Chapter {chNum}of my book taking into consideration my book's high-level outline. The relevant chronological events for Chapter {chNum} should describe when the characters pass from one setting to another setting, when characters first meet each other, and anything else needed to ensure continuity and consistency during the writing process.""".format(chNum=chNum)
-    chat = [
-      self.getOutlinePrompt(),
-      self.getOutline(),
-      self.getProtagionistPrompt(),
-      self.getProtagionist(),
-      chronoPrompt
-    ]
+    chat = []
+    chat.extend(
+      self.getBookPrompts(chNum))
+    chat.append(chronoPrompt)
     self.setChChrono(
       chNum,
       self.chatAssistantResp(
-        '''Update Ch {chNum} Chrono'''.format(chNum=chNum),
-        chat
-      )
-    )
+        'Update Ch '+str(chNum)+' Chrono',
+        chat))
   
   def getChChronoPrompt(
     self,
@@ -1508,12 +1518,18 @@ class GenerativeFiction:
     outline: str):
     self.debug("Setting outline of Chapter " + str(chNum) + " to:\n\n" + outline)
     key = "ch" + str(chNum) + "Outline"
-    self.book[key] = outline
+    self.getChOutlines()[key] = outline
   
   def getChOutline(
     self,
     chNum: int):
     key = "ch" + str(chNum) + "Outline"
+    return self.getChOutlines()[key]
+  
+  def getChOutlines(self):
+    key = "chOutlines"
+    if key not in self.book:
+      self.book[key] = {}
     return self.book[key]
   
   def getChDraftPrompt(
