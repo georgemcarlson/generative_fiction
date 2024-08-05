@@ -256,7 +256,7 @@ class GenerativeFiction:
         chDraftScenes,
         chFinalScenes)
       chFinalScenes.append(scene)
-      if i > 1:
+      if i > 0:
         self.critical(p("* * *"))
       self.critical(p(scene))
     self.updateChOutline(
